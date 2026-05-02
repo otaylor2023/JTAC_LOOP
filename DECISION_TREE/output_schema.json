@@ -1,0 +1,460 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Nine-Line Output Schema",
+  "description": "Structured output of the deterministic decision tree. Maps directly to React UI fields. Always routes through JTAC then GFC.",
+  "version": "1.0.0",
+  "type": "object",
+  "required": [
+    "metadata", "pid", "status", "game_plan", "nine_line", "remarks",
+    "munition", "routing", "reasoning_trace"
+  ],
+  "properties": {
+
+    "metadata": {
+      "type": "object",
+      "required": ["timestamp_utc", "drone_call_sign", "target_id", "tree_confidence"],
+      "properties": {
+        "timestamp_utc": { "type": "string", "format": "date-time", "ui_field": "header_timestamp" },
+        "drone_call_sign": { "type": "string", "ui_field": "header_drone" },
+        "target_id": { "type": "string", "description": "Internal ID for tracking", "ui_field": "header_target_id" },
+        "tree_confidence": {
+          "type": "number", "minimum": 0, "maximum": 1,
+          "description": "Aggregate confidence — below 0.7 surface warning",
+          "ui_field": "confidence_meter",
+          "ui_warning_threshold": 0.7
+        },
+        "system_version": { "type": "string", "default": "decision_tree_v1.0" }
+      }
+    },
+
+    "pid": {
+      "type": "object",
+      "description": "Positive Identification block. SYSTEM ENFORCES: 9-line cannot be acted on without ≥2 corroborating sources.",
+      "required": ["classification", "confidence_score", "corroborating_sources", "sufficient_for_engagement"],
+      "properties": {
+        "classification": { "type": "string", "ui_field": "pid_classification" },
+        "confidence_score": { "type": "number", "minimum": 0, "maximum": 1, "ui_field": "pid_confidence" },
+        "observation_duration_s": { "type": "integer", "ui_field": "pid_observation_duration" },
+        "corroborating_sources": {
+          "type": "array",
+          "minItems": 2,
+          "description": "MUST have at least 2 sources before sufficient_for_engagement can be true (JFO ATTP ¶1-136)",
+          "items": {
+            "type": "object",
+            "required": ["source_type", "confidence", "timestamp_utc"],
+            "properties": {
+              "source_type": {
+                "type": "string",
+                "enum": ["drone_eo_ir_cnn", "sigint", "ground_team_visual", "ground_team_radio", "multi_pass_observation", "operator_override", "external_isr", "human_intel"]
+              },
+              "details": { "type": "string" },
+              "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+              "timestamp_utc": { "type": "string", "format": "date-time" },
+              "operator_id": { "type": "string", "description": "If type is operator_override, who logged the justification" }
+            }
+          },
+          "ui_field": "pid_sources_list"
+        },
+        "sufficient_for_engagement": {
+          "type": "boolean",
+          "description": "True only if corroborating_sources length >= 2 AND combined confidence above threshold",
+          "ui_field": "pid_sufficient_indicator"
+        },
+        "citation": { "type": "string", "default": "JFO ATTP ¶1-136; CJCSI 3160.01 p.D-A-7" }
+      }
+    },
+
+    "status": {
+      "type": "object",
+      "required": ["engageability", "flags", "requires_gfc_initials", "requires_elevated_approval"],
+      "properties": {
+        "engageability": {
+          "type": "string",
+          "enum": ["ENGAGEABLE", "ENGAGEABLE_WITH_CAVEATS", "NOT_ENGAGEABLE", "SELF_DEFENSE_OVERRIDE"],
+          "ui_field": "status_badge"
+        },
+        "flags": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["flag_id", "label", "severity"],
+            "properties": {
+              "flag_id": { "type": "string", "description": "Stable identifier for filtering" },
+              "label": { "type": "string", "description": "Human-readable" },
+              "severity": { "type": "string", "enum": ["info", "warning", "critical"] },
+              "citation": { "type": "string" }
+            }
+          },
+          "ui_field": "flag_list",
+          "examples": [
+            "DANGER_CLOSE", "EXTREME_DANGER_CLOSE", "CDE_ELEVATED", "CAT_I_NEAR",
+            "LOW_CONFIDENCE", "INSUFFICIENT_PID", "SELF_DEFENSE_OVERRIDE",
+            "TYPE_1_PROHIBITED", "MARGINAL_EFFECTIVENESS", "URBAN_CDE",
+            "TLE_DEGRADED", "WEATHER_DEGRADED", "MANPADS_THREAT"
+          ]
+        },
+        "requires_gfc_initials": {
+          "type": "boolean",
+          "description": "Triggered by danger close. GFC initials must be captured before transmit.",
+          "ui_field": "gfc_initials_required_indicator"
+        },
+        "requires_elevated_approval": {
+          "type": "boolean",
+          "description": "Triggered by CDE Level 5 (dual-use, CBR, environmental, NCV exceeded). Routes to higher echelon than GFC.",
+          "ui_field": "elevated_approval_indicator"
+        },
+        "block_reasons": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Populated when engageability = NOT_ENGAGEABLE. Each entry is the doctrinal reason.",
+          "ui_field": "block_reasons_list"
+        }
+      }
+    },
+
+    "game_plan": {
+      "type": "object",
+      "description": "Precedes 9-line. Minimum elements: control type + method of attack (JP 3-09.3 V-20).",
+      "required": ["control_type", "method_of_attack"],
+      "properties": {
+        "control_type": {
+          "type": "string",
+          "enum": ["Type_1", "Type_2", "Type_3"],
+          "ui_field": "control_type_badge"
+        },
+        "method_of_attack": {
+          "type": "string",
+          "enum": ["BOT", "BOC"],
+          "description": "Bomb On Target (aircrew acquires) or Bomb On Coordinate (system supplies grid)",
+          "ui_field": "moa_badge"
+        },
+        "clearance_call_phrase": {
+          "type": "string",
+          "enum": ["CLEARED HOT", "CLEARED TO ENGAGE"],
+          "description": "Type 1/2 = CLEARED HOT; Type 3 = CLEARED TO ENGAGE",
+          "ui_field": "clearance_call"
+        },
+        "abort_call_phrase": { "type": "string", "default": "ABORT, ABORT, ABORT" }
+      }
+    },
+
+    "nine_line": {
+      "type": "object",
+      "description": "Core 9-line CAS brief. Lines 1-3 are populated by the controlling JTAC at runtime from their named-IP library. System populates 4-9.",
+      "required": ["line_4", "line_5", "line_6", "line_7", "line_8", "line_9"],
+      "properties": {
+        "line_1_ip": {
+          "type": "object",
+          "description": "Initial Point — populated by JTAC at runtime",
+          "properties": {
+            "value": { "type": "string", "description": "Named IP designator, e.g. 'IP NORTH'" },
+            "filled_by": { "type": "string", "default": "jtac_runtime" },
+            "system_suggestion": { "type": "string", "description": "Optional: system-suggested IP from geometry" },
+            "available_ips": { "type": "array", "items": { "type": "string" }, "description": "From mission planning" }
+          },
+          "ui_field": "line_1_ip_dropdown"
+        },
+        "line_2_heading": {
+          "type": "object",
+          "description": "Heading from IP to target, magnetic degrees",
+          "properties": {
+            "value_deg_magnetic": { "type": "integer", "minimum": 0, "maximum": 359 },
+            "filled_by": { "type": "string", "default": "computed_after_ip_selected" },
+            "offset_side": { "type": "string", "enum": ["left", "right", "none"] }
+          },
+          "ui_field": "line_2_heading_field"
+        },
+        "line_3_distance": {
+          "type": "object",
+          "properties": {
+            "value": { "type": "number" },
+            "units": { "type": "string", "enum": ["nm", "m"], "description": "FW = nautical miles to nearest tenth, RW = meters to nearest 100" },
+            "filled_by": { "type": "string", "default": "computed_after_ip_selected" }
+          },
+          "ui_field": "line_3_distance_field"
+        },
+        "line_4": {
+          "type": "object",
+          "required": ["value", "units", "datum", "mandatory_readback"],
+          "description": "Target elevation. Mandatory readback per JP 3-09.3 V-26.",
+          "properties": {
+            "value": { "type": "integer", "description": "Elevation value" },
+            "units": { "type": "string", "default": "ft" },
+            "datum": { "type": "string", "default": "MSL", "description": "Mean Sea Level standard; if otherwise, must state in transmission" },
+            "source": { "type": "string", "enum": ["dem_lookup", "drone_lrf", "mensurated"] },
+            "mandatory_readback": { "type": "boolean", "default": true }
+          },
+          "ui_field": "line_4_elevation_field"
+        },
+        "line_5": {
+          "type": "object",
+          "required": ["value"],
+          "description": "Target description. Plain language sufficient for aircrew recognition.",
+          "properties": {
+            "value": { "type": "string", "description": "e.g., '2x technical with mounted MG'" },
+            "count": { "type": "integer" },
+            "target_class": { "type": "string", "description": "Internal class, e.g. vehicle_wheeled_soft" },
+            "movement_state": { "type": "string", "enum": ["stationary", "slow", "fast"] },
+            "speed_kts": { "type": "number", "description": "If moving" },
+            "heading_deg": { "type": "integer", "description": "If moving" },
+            "movement_timestamp_utc": { "type": "string", "format": "date-time" },
+            "in_structure": { "type": "boolean" }
+          },
+          "ui_field": "line_5_description_field"
+        },
+        "line_6": {
+          "type": "object",
+          "required": ["format", "value", "datum", "tle_category", "mandatory_readback"],
+          "description": "Target location. Mandatory readback per JP 3-09.3 V-26.",
+          "properties": {
+            "format": { "type": "string", "enum": ["MGRS", "lat_lon", "offset_from_known_point"] },
+            "value": { "type": "string", "description": "Formatted per format type" },
+            "lat": { "type": "number" },
+            "lon": { "type": "number" },
+            "mgrs": { "type": "string", "description": "Full MGRS string with 100km square identifier" },
+            "datum": { "type": "string", "default": "WGS-84" },
+            "tle_category": { "type": "string", "enum": ["CAT_I", "CAT_II", "CAT_III"] },
+            "tle_meters": { "type": "number" },
+            "source": { "type": "string", "enum": ["drone_sensor", "mensurated_pss_sof", "lrf_polar"] },
+            "mandatory_readback": { "type": "boolean", "default": true }
+          },
+          "ui_field": "line_6_location_field"
+        },
+        "line_7": {
+          "type": "object",
+          "required": ["mark_type"],
+          "properties": {
+            "mark_type": {
+              "type": "string",
+              "enum": ["laser", "ir_pointer", "smoke", "talk_on", "no_mark", "beacon", "indirect_fire_mark", "direct_fire_mark"]
+            },
+            "value": { "type": "string", "description": "Formatted line text e.g. 'Drone laser, code 1688'" },
+            "lasing_call_sign": { "type": "string" },
+            "prf_code": { "type": "string", "pattern": "^[1-8][1-8][1-8][1-8]$", "description": "4-digit PRF code" },
+            "smoke_color": { "type": "string", "description": "From SPINS" },
+            "backup_mark": {
+              "type": "object",
+              "description": "Redundant mark plan per JP 3-09.3 III-78",
+              "properties": {
+                "mark_type": { "type": "string" },
+                "value": { "type": "string" }
+              }
+            }
+          },
+          "ui_field": "line_7_mark_field"
+        },
+        "line_8": {
+          "type": "object",
+          "required": ["direction", "distance_m"],
+          "description": "Friendly position relative to target. Cardinal/sub-cardinal direction + distance in meters.",
+          "properties": {
+            "direction": { "type": "string", "enum": ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] },
+            "distance_m": { "type": "integer" },
+            "value": { "type": "string", "description": "Formatted e.g. 'SW 800m'" },
+            "exposure": { "type": "string", "enum": ["open", "vehicle_mounted", "dug_in", "armored", "in_structure"] },
+            "axis_orientation_deg": { "type": "integer", "description": "Friendly axis — used for FAH parallel rule" },
+            "ir_strobe": { "type": "boolean" },
+            "vs17_panel": { "type": "boolean" },
+            "taking_effective_fire": { "type": "boolean" }
+          },
+          "ui_field": "line_8_friendlies_field"
+        },
+        "line_9": {
+          "type": "object",
+          "required": ["direction", "value"],
+          "properties": {
+            "direction": { "type": "string", "enum": ["N", "NE", "E", "SE", "S", "SW", "W", "NW", "pilot_discretion"] },
+            "value": { "type": "string", "description": "Formatted e.g. 'Egress north, climb to 15K'" },
+            "altitude_block_ft": { "type": "string" },
+            "control_point": { "type": "string", "description": "Named control point if applicable" }
+          },
+          "ui_field": "line_9_egress_field"
+        },
+        "additional_targets": {
+          "type": "array",
+          "description": "For multi-target briefs (Type 3). Format: lines 4, 6, 8 only after first 9-line (JP 3-09.3 V-27).",
+          "items": {
+            "type": "object",
+            "properties": {
+              "line_4": { "$ref": "#/properties/nine_line/properties/line_4" },
+              "line_6": { "$ref": "#/properties/nine_line/properties/line_6" },
+              "line_8": { "$ref": "#/properties/nine_line/properties/line_8" }
+            }
+          }
+        }
+      }
+    },
+
+    "remarks": {
+      "type": "array",
+      "description": "Ordered per JP 3-09.3 V-30 to V-32. Restrictions are mandatory readback.",
+      "items": {
+        "type": "object",
+        "required": ["text", "type", "mandatory_readback"],
+        "properties": {
+          "text": { "type": "string" },
+          "type": { "type": "string", "enum": ["remark", "restriction"] },
+          "category": {
+            "type": "string",
+            "enum": [
+              "ltl", "ordnance_request", "threat", "additional_fires",
+              "additional_calls", "hazards_weather", "pla", "danger_close",
+              "aca", "fah", "lateral_altitude_separation", "bp_approval",
+              "tot_ttt", "self_defense", "moving_target", "tle", "nvd"
+            ]
+          },
+          "mandatory_readback": { "type": "boolean" },
+          "ordering_priority": { "type": "integer", "description": "Lower = earlier in transmission" },
+          "citation": { "type": "string" }
+        }
+      },
+      "ui_field": "remarks_list"
+    },
+
+    "munition": {
+      "type": "object",
+      "required": ["primary"],
+      "properties": {
+        "primary": {
+          "type": "object",
+          "required": ["id", "name", "fuze", "count"],
+          "properties": {
+            "id": { "type": "string" },
+            "name": { "type": "string" },
+            "fuze": { "type": "string", "enum": ["nose", "tail", "dual", "airburst_proximity", "delay", "hard_target_smart_fuze", "contact"] },
+            "count": { "type": "integer" },
+            "delivery_aircraft": { "type": "string" },
+            "guidance": { "type": "string" },
+            "warhead_lb": { "type": "number" },
+            "red_standing_m": { "type": "number" },
+            "tle_required_m": { "type": "number" },
+            "effectiveness_rating": { "type": "string", "enum": ["PREFERRED", "ACCEPTABLE", "MARGINAL", "NOT_REC"] },
+            "effectiveness_score": { "type": "number" }
+          }
+        },
+        "alternatives": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "why_considered": { "type": "string" },
+              "effectiveness_rating": { "type": "string" },
+              "effectiveness_score": { "type": "number" },
+              "preview_nine_line": { "type": "object" }
+            }
+          },
+          "ui_field": "alternatives_list"
+        },
+        "eliminated": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "reason": { "type": "string" }
+            }
+          },
+          "ui_field": "eliminated_list_collapsed"
+        }
+      }
+    },
+
+    "routing": {
+      "type": "object",
+      "description": "9-line ALWAYS routes drone → JTAC → GFC → aircraft. No bypass.",
+      "required": ["chain", "current_step", "next_recipient", "final_approver"],
+      "properties": {
+        "chain": {
+          "type": "array",
+          "default": ["system_generated", "jtac_review", "gfc_approval", "aircrew_transmit"],
+          "items": { "type": "string" }
+        },
+        "current_step": {
+          "type": "string",
+          "enum": ["system_generated", "jtac_review", "gfc_approval", "aircrew_transmit", "executed", "aborted"],
+          "ui_field": "routing_progress_indicator"
+        },
+        "next_recipient": {
+          "type": "string",
+          "enum": ["jtac", "gfc", "aircrew"],
+          "default": "jtac"
+        },
+        "final_approver": {
+          "type": "string",
+          "default": "gfc",
+          "description": "GFC always required for transmission. Elevated approvers if requires_elevated_approval."
+        },
+        "elevated_approver": {
+          "type": "string",
+          "enum": ["division_commander", "ccdr", "sec_def", "potus"],
+          "description": "Populated only if requires_elevated_approval is true"
+        },
+        "jtac_action": {
+          "type": "object",
+          "properties": {
+            "action": { "type": "string", "enum": ["pending", "confirm", "alter", "deny"] },
+            "altered_fields": { "type": "object", "description": "JSON patch of fields changed by JTAC" },
+            "deny_reason": { "type": "string" },
+            "jtac_id": { "type": "string" },
+            "jtac_signature_timestamp_utc": { "type": "string", "format": "date-time" }
+          }
+        },
+        "gfc_action": {
+          "type": "object",
+          "properties": {
+            "action": { "type": "string", "enum": ["pending", "approve", "reject", "request_modification"] },
+            "initials": { "type": "string", "description": "Required when requires_gfc_initials = true" },
+            "gfc_id": { "type": "string" },
+            "gfc_signature_timestamp_utc": { "type": "string", "format": "date-time" },
+            "modification_request": { "type": "string" }
+          }
+        },
+        "audit_log": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "actor": { "type": "string" },
+              "action": { "type": "string" },
+              "timestamp_utc": { "type": "string", "format": "date-time" },
+              "details": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+
+    "reasoning_trace": {
+      "type": "array",
+      "description": "Per-tree reasoning. Each entry is one tree's path through nodes that fired. Used by GFC drill-down.",
+      "items": {
+        "type": "object",
+        "required": ["tree", "decision"],
+        "properties": {
+          "tree": { "type": "string", "enum": ["engageability_gate", "munition_selection", "control_type_selection", "mark_method", "ip_egress", "restriction_enumeration"] },
+          "nodes_fired": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "node_id": { "type": "string" },
+                "outcome": { "type": "string" },
+                "input_values": { "type": "object" },
+                "citation": { "type": "string" }
+              }
+            }
+          },
+          "decision": { "type": "string" },
+          "reasoning_paragraph": {
+            "type": "string",
+            "description": "Optional natural-language summary (LLM-generated; degrades cleanly to nodes_fired list)"
+          }
+        }
+      },
+      "ui_field": "reasoning_drilldown"
+    }
+  }
+}

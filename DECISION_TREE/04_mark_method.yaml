@@ -1,0 +1,208 @@
+# Tree 4 — Mark Method Selection
+#
+# How will the pilot find the target? This populates Line 7 of the 9-line.
+# Doctrinal source: JP 3-09.3 III-77 to III-81 (Figures III-20, III-21, III-22)
+#                    JFO ATTP ¶¶1-149 to 1-158 (laser); ¶1-65 (IR pointer); ¶1-63 (talk-on)
+
+tree: mark_method
+version: 1.0
+
+inputs:
+  - time_of_day                        # day | night | civil_twilight
+  - aircrew_nvg_capable                # bool
+  - munition_guidance                  # laser | gps | gps_laser | iir | ballistic
+  - drone_has_laser_designator         # bool
+  - drone_laser_prf_codes_available    # list of 4-digit codes
+  - aircraft_lst_capable               # bool — aircraft can track laser spot
+  - jtac_has_ir_pointer                # bool — for marking, not designation
+  - jtac_has_smoke_capability          # mortar/rocket/grenade
+  - weather                            # cloud_ceiling_ft, visibility_m, wind_kts, smoke_dust_present
+  - terrain                            # urban | rural | mountainous
+  - friendlies_have_ir_strobe          # bool — for friendly mark
+  - vdl_rover_available                # bool — JTAC sees aircraft sensor feed
+  - method_of_attack                   # BOT | BOC
+
+# ──────────────────────────────────────────────────────────────────────────
+# HARD RULES
+# ──────────────────────────────────────────────────────────────────────────
+
+hard_rules:
+
+  - id: laser_required_for_lgw
+    plain_language: "If the weapon is laser-guided, you MUST have a laser designator on the target."
+    rule: |
+      if munition_guidance == "laser":
+        REQUIRE: laser_designation
+        if NOT (drone_has_laser_designator OR aircraft_self_designating OR buddy_lase_available):
+          BLOCK: weapon not viable, return to munition tree for non-laser alternative
+    citation: "JP 3-09.3 III-79"
+
+  - id: ir_pointer_cannot_guide
+    plain_language: "IR pointers can mark for night-NVG aircrew but CANNOT guide weapons."
+    rule: |
+      IR_pointer is a MARK only. Cannot substitute for laser designation of an LGW.
+    citation: "JFO ATTP ¶1-65 (verbatim): 'Unlike LASER designators, IR pointers cannot be used to
+              guide or improve the accuracy of aircraft ordnance.'"
+
+  - id: bomb_on_coordinate_no_mark_required
+    plain_language: "If the attack is BOC (bomb on coordinate), no mark is required for the aircraft."
+    rule: |
+      if method_of_attack == "BOC":
+        Line_7 = "no mark"
+        EXCEPT: if off-board lasing is providing terminal guidance (LGW via JTAC laser):
+          Line_7 = "<lasing_call_sign> laser, code <PRF>"
+    citation: "JP 3-09.3 V-6"
+
+# ──────────────────────────────────────────────────────────────────────────
+# DECISION CASCADE — picks PRIMARY mark + plans BACKUP mark
+# ──────────────────────────────────────────────────────────────────────────
+
+decision_cascade:
+
+  # Top of tree: BOC vs BOT
+  - id: bot_vs_boc_branch
+    plain_language: "Is this a Bomb-on-Target (visual aircraft acquisition) or Bomb-on-Coordinate attack?"
+    branch_on: method_of_attack
+    branches:
+      BOC:
+        if munition_guidance == laser:
+          GOTO: select_laser_designator
+        else:
+          SELECT: "no mark"
+          PLAN_BACKUP: talk_on_for_aircrew_situational_awareness
+      BOT:
+        GOTO: time_of_day_branch
+
+  # ── DAY/NIGHT branch for BOT ────────────────────────────────────────────
+  - id: time_of_day_branch
+    branch_on: time_of_day
+    branches:
+      night:
+        GOTO: night_marking_cascade
+      day | civil_twilight:
+        GOTO: day_marking_cascade
+
+  # ── NIGHT marking cascade ───────────────────────────────────────────────
+  - id: night_marking_cascade
+    plain_language: "Night ops — IR pointer is the canonical mark for NVG-equipped aircrew."
+    sequence:
+      - if aircrew_nvg_capable AND jtac_has_ir_pointer AND NOT enemy_has_nvg:
+          PRIMARY: "IR pointer (SPARKLE)"
+          remarks: ["Initiate IR mark 20-30 seconds prior to TTT (JP 3-09.3 III-80)"]
+          BACKUP: laser_if_available_else_talk_on
+          friendly_mark: "IR strobe at friendly position (PULSE)"
+      - elif drone_has_laser_designator AND aircraft_lst_capable:
+          PRIMARY: "drone laser designation"
+          line_7_format: "<drone_call_sign> laser, code <PRF>"
+          remarks:
+            - "LTL <azimuth_deg>M magnetic"
+            - "FAH <fah_low>-<fah_high> clockwise (LTL ± 10° to ± 60°)"
+          BACKUP: ir_pointer_if_available
+      - else:
+          PRIMARY: "talk-on with friendly IR strobe reference"
+          BACKUP: smoke_at_first_light
+          flag: "DEGRADED MARKING — JTAC review especially recommended"
+    citation: "JP 3-09.3 III-80; JFO ATTP ¶1-65"
+
+  # ── DAY marking cascade ─────────────────────────────────────────────────
+  - id: day_marking_cascade
+    sequence:
+      - if munition_guidance == laser:
+          PRIMARY: "laser designation"
+          line_7_format: "<lasing_call_sign> laser, code <PRF>"
+          remarks:
+            - "LTL <azimuth_deg>M magnetic"
+            - "FAH <fah_low>-<fah_high> clockwise"
+          BACKUP: smoke_or_talk_on
+      - elif jtac_has_smoke_capability AND wind_drift_acceptable AND NOT urban_civilian_dense:
+          PRIMARY: "smoke (color per SPINS)"
+          remarks: ["Mark within 100 m of target (effective); ≤300 m generally acceptable (JP 3-09.3 III-78)"]
+          BACKUP: talk_on
+      - elif vdl_rover_available:
+          PRIMARY: "VDL talk-on (drone sensor feed shared)"
+          BACKUP: smoke_or_direct_fire_mark
+      - else:
+          PRIMARY: "talk-on from common reference point"
+          remarks:
+            - "1/4 to 4 unit-of-measure rule (JFO ATTP ¶1-63)"
+            - "Use cardinal/sub-cardinal directions only — no clock positions"
+          BACKUP: friendly_position_mark_VS17_panel
+    citation: "JP 3-09.3 III-78; JFO ATTP ¶1-63"
+
+# ──────────────────────────────────────────────────────────────────────────
+# LASER GEOMETRY (when laser is selected)
+# ──────────────────────────────────────────────────────────────────────────
+
+laser_geometry:
+  applies_when: "PRIMARY == laser_designation"
+  computations:
+
+    - LTL:
+        plain_language: "Laser-to-Target Line: bearing from designator to target, magnetic degrees"
+        formula: "magnetic_bearing(designator_position, target_position)"
+        passed_in_remarks: true
+
+    - FAH_cone:
+        plain_language: "Final Attack Heading restriction — keeps aircraft inside laser acquisition basket and out of safety zone."
+        formula: |
+          fah_low_offset_from_LTL = 10  # safety zone outer edge
+          fah_high_offset_from_LTL = 60  # acquisition basket outer edge
+          fah_low_deg = (LTL + 10) mod 360
+          fah_high_deg = (LTL + 60) mod 360
+          # State as clockwise pair (e.g., "190 to 240 clockwise")
+        citation: "JFO ATTP ¶1-152 to 1-154"
+
+    - safety_zone:
+        plain_language: "20° cone behind the target along the LTL — aircraft must avoid."
+        geometry: "10° each side of LTL, vertical 20°"
+        citation: "JFO ATTP ¶1-152"
+
+    - safe_acquisition_zone:
+        plain_language: "120° cone in front of LTL — best laser acquisition; preferred 10°-45° off LTL."
+        citation: "JFO ATTP ¶1-153"
+
+  brevity_sequence_pre_release:
+    - "TEN SECONDS"     # JTAC initiates 10-second lasing window
+    - "LASER ON"        # designator activates
+    - "LASING"          # aircrew confirms designator on
+    - "SPOT"            # aircrew seeker captured laser spot
+    - "TERMINATE"       # JTAC ends lasing after impact / no-go
+    citation: "JP 3-09.3 III-79 Figure III-21; JFO ATTP ¶1-156"
+
+  burn_time_limit_s: 20
+  recommended_lase_duration_s: "8-12 (last seconds of weapon flight)"
+  citation: "JFO ATTP ¶1-158"
+
+# ──────────────────────────────────────────────────────────────────────────
+# REDUNDANT MARK — always plan one
+# ──────────────────────────────────────────────────────────────────────────
+
+redundant_mark_planning:
+  rule: "Whenever feasible, plan a backup mark in case the primary fails."
+  preferred_combos:
+    - [laser, smoke]
+    - [ir_pointer, ir_strobe_friendly_mark]
+    - [smoke, talk_on]
+    - [laser, ir_pointer_for_friendly_mark]
+  citation: "JP 3-09.3 III-78"
+
+# ──────────────────────────────────────────────────────────────────────────
+# BREVITY DICTIONARY (for system-generated text)
+# ──────────────────────────────────────────────────────────────────────────
+
+brevity:
+  TALLY: "sighting of target / non-friendly"
+  CONTACT: "sighting of specified reference point"
+  CAPTURED: "surface target acquired and tracked by onboard sensor"
+  VISUAL: "friendly aircraft / position sighted"
+  BLIND: "friendly aircraft / position not sighted"
+  LOOKING: "do not have ground object / reference / target in sight"
+  SPARKLE: "marking by IR pointer"
+  SNAKE: "oscillate IR pointer in figure-8"
+  PULSE: "flashing IR (often friendly ID)"
+  STEADY: "stop IR oscillation"
+  ROPE: "circle IR pointer around aircraft for friendly ID — caution NVG damage"
+  CONTACT_SPARKLE: "IR sparkle sighted"
+  MATCH_SPARKLE: "directive to overlay second IR mark on existing"
+  FUMBLE: "directive to backup laser designator to begin lasing"
+  citation: "JP 3-09.3 III-78 to III-81 Figures III-20, III-21, III-22"

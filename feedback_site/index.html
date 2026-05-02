@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>JTAC Decision Tree — Collen Feedback</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .mono { font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
+  .nine-line {
+    background: #0f172a; color: #e2e8f0; padding: 1rem 1.25rem;
+    border-radius: 0.5rem; font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 0.875rem; line-height: 1.6;
+  }
+  .nine-line .label { color: #fbbf24; }
+  .nine-line .value { color: #e2e8f0; }
+  .nine-line .restriction { color: #f87171; }
+  .badge { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+  .badge-pref { background: #dcfce7; color: #166534; }
+  .badge-warn { background: #fef3c7; color: #92400e; }
+  .badge-block { background: #fee2e2; color: #991b1b; }
+  .grade-btn { transition: all 0.1s ease; cursor: pointer; }
+  .grade-btn.selected { transform: scale(1.05); }
+  .grade-btn.thumb-up.selected { background: #16a34a; color: white; }
+  .grade-btn.thumb-down.selected { background: #dc2626; color: white; }
+  .grade-btn.thumb-unsure.selected { background: #f59e0b; color: white; }
+  details > summary { cursor: pointer; }
+</style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+
+<!-- HEADER -->
+<header class="bg-slate-900 text-white border-b-4 border-amber-400">
+  <div class="max-w-6xl mx-auto px-6 py-6">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <h1 class="text-2xl font-bold">JTAC Decision Tree — Feedback Review</h1>
+        <p class="text-slate-300 mt-1 max-w-2xl">
+          National security hackathon project: deterministic 9-line generator from drone video + friendly positions.
+          Below are 10 mock scenarios + 8 open doctrinal questions. Your job: tell us where the system is wrong,
+          right, or close-but-not-quite, and answer the open questions.
+        </p>
+      </div>
+      <div class="flex flex-col gap-2">
+        <button id="exportBtn"
+          class="bg-amber-400 hover:bg-amber-500 text-slate-900 font-semibold px-4 py-2 rounded-md text-sm">
+          Export feedback (JSON)
+        </button>
+        <button id="copyBtn"
+          class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-md text-sm">
+          Copy to clipboard
+        </button>
+        <button id="resetBtn"
+          class="bg-red-700 hover:bg-red-600 text-white px-4 py-2 rounded-md text-xs">
+          Reset all
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- INTRO -->
+<section class="max-w-6xl mx-auto px-6 py-6">
+  <div class="bg-white border border-slate-200 rounded-lg p-6 shadow-sm">
+    <h2 class="text-lg font-semibold text-slate-900 mb-3">How to read each scenario</h2>
+    <ol class="list-decimal list-inside text-slate-700 space-y-1">
+      <li><b>Situation</b> — the inputs the system would receive (target, friendlies, weather, etc.).</li>
+      <li><b>System recommendation</b> — what the deterministic tree outputs (top pick + alternatives + reasoning).</li>
+      <li><b>Per-line grading</b> — thumbs up / down / unsure for each line, plus a comment box.</li>
+      <li><b>Overall grade</b> — would you actually transmit this 9-line, alter it, or deny it?</li>
+      <li><b>What we want from you</b> — the specific judgment calls flagged for your input.</li>
+    </ol>
+    <p class="mt-4 text-sm text-slate-500">
+      All feedback saves to your browser as you go. When you're done, hit "Export" or "Copy to clipboard."
+    </p>
+  </div>
+</section>
+
+<!-- TAB NAV -->
+<nav class="max-w-6xl mx-auto px-6 sticky top-0 bg-slate-50 z-10 border-b border-slate-200">
+  <div class="flex gap-1 overflow-x-auto py-3" id="tabnav"></div>
+</nav>
+
+<!-- CONTENT -->
+<main class="max-w-6xl mx-auto px-6 py-8" id="main"></main>
+
+<footer class="border-t border-slate-200 mt-12 py-6 text-center text-sm text-slate-500">
+  Decision tree v1.0 · Generated from doctrine in <span class="mono">/JTAC_Manuals/REFERENCES/</span>
+</footer>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────
+// SCENARIO + RECOMMENDATION DATA
+// (mirrors SCENARIOS/scenarios.yaml + system output for each)
+// ─────────────────────────────────────────────────────────────────────
+
+const SCENARIOS = [
+  {
+    id: 'S01', title: 'Single technical, open terrain',
+    situation: {
+      target: '1x technical with mounted DShK heavy machine gun, stationary',
+      target_loc: '38SMB12345678 (CAT III, mensurated to ~30m)',
+      target_elevation_ft_msl: 312,
+      friendlies: '800m southwest, dug-in, axis 045°',
+      civilians: 'None within 5km',
+      aircraft: 'A-10 with 4x GBU-12, 2x AGM-65D, 1100 rds GAU-8 (30mm)',
+      weather: 'Clear, ceiling 12000ft, wind 8kts',
+      time_of_day: 'Day',
+      threats: 'None known',
+      jtac_visual: 'Drone has target; JTAC remote (no visual on aircraft or target)'
+    },
+    rec: {
+      munition: 'GBU-12',
+      alternatives: [
+        { id: 'AGM-65D', why: 'IIR-guided alternative if laser fails' },
+        { id: 'GAU-8 30mm', why: 'Strafe — no danger close, very low CDE' }
+      ],
+      control_type: 'Type 2',
+      method_of_attack: 'BOT',
+      mark_method: 'Laser designation, code 1688',
+      nine_line: {
+        line_4: '312 ft MSL',
+        line_5: '1x technical with mounted MG',
+        line_6: '38SMB12345678 (WGS-84)',
+        line_7: 'Drone laser, code 1688',
+        line_8: 'SW 800m',
+        line_9: 'Egress north, climb to 15K'
+      },
+      remarks: ['LTL 045M', 'FAH 055-105 clockwise', 'TOT push when ready'],
+      flags: [],
+      reasoning: 'Soft target, friendlies safe (800m > GBU-12 RED 275m), weather clear, GBU-12 highest matrix score. Type 2 default since drone is sole sensor.'
+    },
+    grade_targets: ['line_5', 'line_6', 'line_7', 'line_8', 'line_9', 'munition', 'control_type', 'remarks'],
+    questions: [
+      'Is GBU-12 your first choice, or would you prefer AGM-65D given ROE wear-out concerns or laser-vs-IIR weather concerns?',
+      'Type 2 right when JTAC has no visual on either target or aircraft (drone is sole sensor)?',
+      'TOT preference for non-time-sensitive targets: push / scheduled / immediate?'
+    ]
+  },
+
+  {
+    id: 'S02', title: 'Same target — but moving slowly',
+    situation: {
+      target: '1x technical, moving 25 kts heading 270°',
+      target_loc: '38SMB12345678 (CAT III)',
+      target_elevation_ft_msl: 312,
+      friendlies: '800m southwest, dug-in',
+      civilians: 'None',
+      aircraft: 'A-10 with 4x GBU-12, 2x AGM-65D, GAU-8',
+      weather: 'Clear',
+      time_of_day: 'Day',
+      threats: 'None'
+    },
+    rec: {
+      munition: 'AGM-65D',
+      alternatives: [
+        { id: 'GBU-54 LJDAM', why: '(if available) GPS+laser hybrid for movers' },
+        { id: 'GAU-8 30mm', why: 'Strafe at slow movers' }
+      ],
+      control_type: 'Type 2',
+      method_of_attack: 'BOT',
+      mark_method: 'Pilot-acquired (IIR seeker)',
+      nine_line: {
+        line_4: '312 ft MSL',
+        line_5: '1x technical, moving 25kts heading 270',
+        line_6: '38SMB12345678 (time stamp 1247Z)',
+        line_7: 'No mark — pilot acquisition (IIR)',
+        line_8: 'SW 800m',
+        line_9: 'Egress north'
+      },
+      remarks: ['Moving target time stamp 1247Z, 25kts heading 270', 'TOT push when ready'],
+      reasoning: 'AFTTP 6.3.4: laser harder on movers above ~highway speed. AGM-65D IIR autonomous seeker preferred. GBU-12 marginal. GBU-54 would be the doctrinal "best" but A-10 cannot deliver it.'
+    },
+    grade_targets: ['munition', 'mark_method', 'control_type', 'line_5'],
+    questions: [
+      'Does the system flip to Maverick correctly?',
+      'Would you instead prefer the A-10 do gun runs on slow movers with 30mm?',
+      'For the moving target time stamp / speed / heading in remarks — does this format match what you brief in real CAS?'
+    ]
+  },
+
+  {
+    id: 'S03', title: 'Danger close — friendlies inside RED',
+    situation: {
+      target: '8x dismounted infantry advancing toward friendly position',
+      target_loc: 'CAT III, ~240m from friendlies',
+      target_elevation_ft_msl: 250,
+      friendlies: '240m, dug-in, taking effective fire (axis 030°)',
+      civilians: 'None',
+      aircraft: 'AH-64 with 4x AGM-114K, 4x AGM-114R, 800 rds 30mm',
+      weather: 'Clear, ceiling 9000ft',
+      time_of_day: 'Day',
+      threats: 'None',
+      jtac_visual: 'JTAC visual on target AND aircraft',
+      friendlies_taking_fire: 'YES'
+    },
+    rec: {
+      munition: 'AGM-114K (Hellfire, RED 110m — friendlies SAFE at 240m)',
+      alternatives: [
+        { id: 'AGM-114R', why: 'Multi-purpose Hellfire, RED 130m still safe' },
+        { id: '30mm strafe', why: 'Direct fire <105mm — exempt from CDE' }
+      ],
+      control_type: 'Type 1 (forced — danger close + JTAC has dual visual)',
+      method_of_attack: 'BOT',
+      mark_method: 'Aircraft self-designation (Apache LST)',
+      nine_line: {
+        line_4: '250 ft MSL',
+        line_5: '8x dismounted infantry advancing',
+        line_6: '<grid> (CAT III)',
+        line_7: 'Aircraft self-laser',
+        line_8: 'NE 240m, dug-in, taking fire',
+        line_9: 'Egress south'
+      },
+      remarks: [
+        '⚠ DANGER CLOSE — initials <GFC> required',
+        'FAH parallel to friendly axis 030° ± 30° (reduces long/short fratricide risk)',
+        'SELF-DEFENSE — friendlies under effective fire',
+        'TOT immediate'
+      ],
+      flags: ['SELF_DEFENSE_OVERRIDE', 'DANGER CLOSE'],
+      reasoning: 'Friendlies at 240m. GBU-12 RED is 275m → DANGER CLOSE for any 500lb bomb. Hellfire RED is 110m → safe margin of 130m. Type 1 forced because of (a) JTAC dual visual available and (b) danger close trigger.'
+    },
+    grade_targets: ['munition', 'control_type', 'remarks', 'mark_method'],
+    questions: [
+      'Hellfire over GBU-12 — your call?',
+      'Type 1 forced because of danger close + dual visual — agree?',
+      'When friendlies are taking fire (self-defense), do you still wait for GFC initials, or execute under standing ROE without?',
+      'Is the FAH-parallel-to-friendly-axis rule applied correctly here?'
+    ]
+  },
+
+  {
+    id: 'S04', title: 'Urban — school 400m east, mortar team in building',
+    situation: {
+      target: '3-4 fighters with 82mm mortar on rooftop, 2-story residential building',
+      target_loc: 'CAT II (mensurated)',
+      target_elevation_ft_msl: 180,
+      friendlies: '700m, vehicle-mounted',
+      civilians: 'School at 400m east — school hours, high occupancy',
+      protected: 'Cat I: SCHOOL at 400m',
+      aircraft: 'F-16 with 2x GBU-12, 4x GBU-38, 8x GBU-39 SDB, 510 rds 20mm',
+      weather: 'Clear',
+      time_of_day: 'Day',
+      cnn_confidence: '0.79 (BELOW 0.85 threshold)'
+    },
+    rec: {
+      munition: 'GBU-39 SDB (250 lb, RED 205m)',
+      alternatives: [
+        { id: 'GBU-39 FLM', why: 'Focused-lethality variant, RED 70m if available' },
+        { id: 'AGM-114N', why: 'Thermobaric — preferred if Apache on station (ATP 3-06.1 p.49)' }
+      ],
+      control_type: 'Type 1 (civilians within 500m heuristic)',
+      method_of_attack: 'BOC',
+      mark_method: 'No mark (BOC with GPS-only weapon)',
+      nine_line: {
+        line_4: '180 ft MSL',
+        line_5: 'HVT (mortar team) on rooftop, 2-story building',
+        line_6: '<grid> (CAT II)',
+        line_7: 'No mark',
+        line_8: 'NW 700m',
+        line_9: 'Egress west'
+      },
+      remarks: [
+        '⚠ LOW CLASSIFICATION CONFIDENCE 0.79 — JTAC review recommended',
+        '⚠ Cat I PROTECTED (school) at 400m east — CDE elevated',
+        'FAH: restrict to W or SW (away from school)',
+        'Use delay fuze for in-structure target',
+        'TOT push when ready'
+      ],
+      flags: ['LOW_CONFIDENCE', 'CDE_ELEVATED', 'CAT_I_NEAR'],
+      reasoning: 'School at 400m east → eliminate any munition with RED > 400m. GBU-39 SDB (RED 205) is best fit; GBU-39 FLM (RED 70) ideal if available. GBU-38 (RED 290) acceptable but tighter margin. Confidence 0.79 below threshold → caveat flag.'
+    },
+    grade_targets: ['munition', 'control_type', 'remarks', 'line_5'],
+    questions: [
+      'Is GBU-39 the right choice, or do you prefer to wait for an Apache for tighter CDE?',
+      'Is your unit\'s working rule "school within 500m → don\'t engage at all without higher approval"?',
+      'How would you handle 0.79 classification confidence — pull a JFO or ground confirmation?',
+      'Type 1 forced because civilians within 500m — what\'s your actual rule on this?'
+    ]
+  },
+
+  {
+    id: 'S05', title: 'Night — armor in revetment',
+    situation: {
+      target: 'Single T-72 in earthen revetment, stationary',
+      target_loc: 'CAT II',
+      target_elevation_ft_msl: 450,
+      friendlies: '1500m, dug-in, IR strobes on',
+      civilians: 'None',
+      aircraft: 'F-15E with 4x GBU-12, 2x GBU-31, 2x AGM-65L (NVG capable)',
+      weather: 'Ceiling 8000ft, vis 6000m, wind 10kts',
+      time_of_day: 'NIGHT',
+      threats: 'None',
+      drone_capability: 'Laser designator + IR pointer'
+    },
+    rec: {
+      munition: 'GBU-31 (2000 lb JDAM)',
+      alternatives: [
+        { id: 'GBU-12', why: '500 lb may be insufficient for MBT — marginal' },
+        { id: 'AGM-65L', why: 'Laser Maverick — proven AT capability' }
+      ],
+      control_type: 'Type 2 (GPS munition prohibits Type 1)',
+      method_of_attack: 'BOC',
+      mark_method: 'Drone laser (primary) + IR pointer (backup)',
+      nine_line: {
+        line_4: '450 ft MSL',
+        line_5: '1x T-72 in revetment, stationary',
+        line_6: '<grid> (CAT II)',
+        line_7: 'Drone laser code 1688, IR backup',
+        line_8: 'East 1500m, IR strobe',
+        line_9: 'Egress south'
+      },
+      remarks: [
+        'NVD capable: yes',
+        'Friendly mark: IR strobe',
+        'LTL 270M',
+        'FAH 280-330 clockwise',
+        'TOT push when ready'
+      ],
+      reasoning: 'T-72 needs 2000-lb class to reliably defeat armor. CAT II coords + revetment as wide aimpoint + JDAM viable. Type 1 prohibited for GPS-guided. Night → IR backup mark.'
+    },
+    grade_targets: ['munition', 'control_type', 'mark_method', 'remarks'],
+    questions: [
+      'GBU-31 vs GBU-12 vs AGM-65L for a stationary T-72 — your call?',
+      'Do you require buddy-lase from a different aircraft, or does drone-lase suffice?',
+      'Laser primary + IR pointer backup — the right combo, or different at night?'
+    ]
+  },
+
+  {
+    id: 'S06', title: 'Multi-target — 3x BRDMs in column',
+    situation: {
+      target: '3x BRDM-2 light armored vehicles, dispersed in 800m column, slow moving',
+      target_loc: 'Centroid CAT III',
+      target_elevation_ft_msl: 290,
+      friendlies: '1200m, vehicle-mounted',
+      civilians: 'None',
+      aircraft: 'F-15E with 6x GBU-12, 2x AGM-65D, 60 min playtime',
+      weather: 'Clear',
+      time_of_day: 'Day',
+      multi_target_authorized: 'YES (commander has approved Type 3)'
+    },
+    rec: {
+      munition: 'GBU-12 × 3 (one per BRDM)',
+      alternatives: [
+        { id: 'AGM-65D × 2 + GBU-12 × 1', why: 'Maverick on lead/trail, GBU-12 on stationary middle' }
+      ],
+      control_type: 'Type 3 (multi-target window authorized)',
+      method_of_attack: 'BOT',
+      mark_method: 'Drone laser, sequenced',
+      nine_line: {
+        line_4: '290 ft MSL',
+        line_5: '3x BRDM dispersed in column, slow moving',
+        line_6: 'Centroid <grid>; lead+trail multi-target appended',
+        line_7: 'Drone laser, code 1688, sequenced',
+        line_8: 'NW 1200m',
+        line_9: 'Egress NE'
+      },
+      remarks: [
+        'TYPE 3 — engagement window 0930Z-0945Z',
+        'Geographic boundary: kill box <keypad>',
+        'Specific target set: BRDMs only — do not engage other vehicles in area',
+        'FAH 270-330 clockwise',
+        'Aircrew calls required: COMMENCING ENGAGEMENT, ENGAGEMENT COMPLETE'
+      ],
+      reasoning: 'Dispersed light armor across 800m → multi-target. Type 3 authorized → single engagement window with restrictions.'
+    },
+    grade_targets: ['munition', 'control_type', 'remarks'],
+    questions: [
+      'Is Type 3 right here, or would you stay Type 2 and clear each release?',
+      'Are the restrictions sufficient or are we missing one?',
+      'Do you split the loadout (Maverick + GBU-12) or keep it homogeneous?'
+    ]
+  },
+
+  {
+    id: 'S07', title: 'Bad weather — laser fails, must use JDAM',
+    situation: {
+      target: 'ZSU-23-4 anti-aircraft gun, stationary',
+      target_loc: 'CAT I (mensurated)',
+      target_elevation_ft_msl: 320,
+      friendlies: '1100m',
+      civilians: 'None',
+      aircraft: 'F-15E with 4x GBU-12, 4x GBU-38, 8x GBU-39',
+      weather: 'CEILING 4000 ft (defeats laser), vis 4000m, wind 18kts',
+      threats: 'TARGET IS THE THREAT (ZSU-23-4 active, range ~2500m)'
+    },
+    rec: {
+      munition: 'GBU-38 (500 lb JDAM)',
+      alternatives: [
+        { id: 'GBU-39 SDB', why: 'Smaller, sufficient against soft AAA' },
+        { id: 'AGM-65D', why: 'Standoff IIR — but lower altitude exposes aircraft' }
+      ],
+      control_type: 'Type 2 (GPS munition prohibits Type 1)',
+      method_of_attack: 'BOC',
+      mark_method: 'No mark (BOC, GPS-guided)',
+      nine_line: {
+        line_4: '320 ft MSL',
+        line_5: '1x ZSU-23-4 AAA, stationary',
+        line_6: '<grid> (CAT I)',
+        line_7: 'No mark',
+        line_8: 'East 1100m',
+        line_9: 'Egress west'
+      },
+      remarks: [
+        'Threat: ZSU-23-4 at target location, range 2500m — recommend altitude floor per SPINS',
+        'Aircraft above cloud deck — no visual on aircraft from ground',
+        'TOT push when ready'
+      ],
+      flags: ['LASER_ELIMINATED_BY_WEATHER', 'TARGET_IS_THREAT'],
+      reasoning: 'Cloud ceiling 4000 ft < 5000 ft minimum for LGB acquisition (AFTTP 6.4.3.1) → all laser munitions eliminated. CAT I coords available → JDAM viable. Smallest effective JDAM (GBU-38) chosen.'
+    },
+    grade_targets: ['munition', 'remarks', 'control_type'],
+    questions: [
+      'Is the laser-elimination logic right for a 4000 ft cloud deck?',
+      'When the target IS the threat (AAA), what\'s your actual TTP?',
+      'Do you sometimes accept higher altitude floor and use GBU-39 SDB instead?'
+    ]
+  },
+
+  {
+    id: 'S08', title: 'Hospital adjacent — friendlies under fire',
+    situation: {
+      target: '2-3 fighters in commercial building, RPG launches observed',
+      target_loc: 'CAT II',
+      target_elevation_ft_msl: 200,
+      friendlies: '350m, vehicle-mounted, taking effective fire',
+      civilians: 'Hospital at 80m — high occupancy',
+      protected: 'Cat I: HOSPITAL at 80m',
+      aircraft: 'AH-64 with 2x AGM-114N, 4x AGM-114R, 800 rds 30mm',
+      weather: 'Clear',
+      friendlies_taking_fire: 'YES'
+    },
+    rec: {
+      munition: 'AGM-114N (thermobaric Hellfire, RED 110m)',
+      alternatives: [
+        { id: '30mm strafe', why: 'Direct fire <105mm — EXEMPT from CDE methodology' },
+        { id: 'AGM-114R', why: 'Multi-purpose Hellfire (RED 130m — exceeds hospital distance)' }
+      ],
+      control_type: 'Type 1 (dual visual + danger close + protected nearby)',
+      method_of_attack: 'BOT',
+      mark_method: 'Aircraft self-designation',
+      nine_line: {
+        line_4: '200 ft MSL',
+        line_5: 'HVT in 2-story commercial building, fighters with RPGs',
+        line_6: '<grid> (CAT II)',
+        line_7: 'Aircraft self-laser',
+        line_8: 'East 350m, taking effective fire',
+        line_9: 'Egress north'
+      },
+      remarks: [
+        '⚠ SELF-DEFENSE — friendlies under effective fire',
+        '⚠ Cat I (HOSPITAL) at 80m — auto-escalates to elevated review under standard ROE',
+        '⚠ AGM-114R RED 130m exceeds hospital distance — would NOT use without override',
+        'FAH parallel to and away from hospital (East side) — restrict to W attack heading',
+        'Proportional response per LOW + Standing ROE',
+        'TOT immediate'
+      ],
+      flags: ['SELF_DEFENSE_OVERRIDE', 'CAT_I_INSIDE_RED'],
+      reasoning: 'AGM-114N RED 110m > hospital distance 80m by margin of 30m — TIGHT but acceptable. AGM-114R RED 130m would put hospital INSIDE RED → blocked. 30mm strafe is exempt from CDE entirely (CJCSI 3160.01 p.D-4). Self-defense override applies (friendlies under fire from protected entity is a valid trigger per CJCSI 3160.01 p.C-B-4).'
+    },
+    grade_targets: ['munition', 'control_type', 'remarks', 'mark_method'],
+    questions: [
+      'How do you balance self-defense (friendlies taking fire) against a hospital at 80m?',
+      'AGM-114N thermobaric vs 30mm strafe — which would you actually choose here?',
+      'Does self-defense override the Cat I protected-site block, or does it just adjust the procedure?',
+      'Is the 30m margin (AGM-114N RED 110m vs hospital 80m) acceptable, or too tight?'
+    ]
+  },
+
+  {
+    id: 'S09', title: 'Low classification confidence',
+    situation: {
+      target: 'Pickup truck — possible mounted weapon, ambiguous',
+      target_loc: 'CAT III',
+      target_elevation_ft_msl: 410,
+      friendlies: '1500m',
+      civilians: 'None',
+      aircraft: 'A-10 with 4x GBU-12, 2x AGM-65D, GAU-8',
+      weather: 'Clear',
+      cnn_confidence: '0.65 (BELOW threshold)'
+    },
+    rec: {
+      munition: 'NONE — engagement BLOCKED',
+      alternatives: [],
+      control_type: 'N/A',
+      method_of_attack: 'N/A',
+      mark_method: 'N/A',
+      nine_line: null,
+      remarks: [],
+      flags: ['NOT_ENGAGEABLE', 'INSUFFICIENT_PID', 'LOW_CONFIDENCE'],
+      reasoning: 'CNN confidence 0.65 < 0.85 threshold AND single-source FMV. JFO ATTP ¶1-136: video feeds shall not be used as single-source PID. System recommends: HOLD, request multi-source corroboration (SIGINT, ground team, multi-pass observation), or operator override with logged justification.'
+    },
+    grade_targets: ['decision', 'remedy'],
+    questions: [
+      'Is "hold and observe" the right call, or do you sometimes engage at lower confidence based on context?',
+      'What second source would actually be available to you in the field for a target like this?',
+      'Should the system have a "soft override" path where operator + JTAC can override the confidence block with logged justification?'
+    ]
+  },
+
+  {
+    id: 'S10', title: 'Loadout mismatch — only 500 lb against MBTs',
+    situation: {
+      target: '4x T-72 in column, dispersed 100m apart, stationary',
+      target_loc: 'CAT I',
+      target_elevation_ft_msl: 380,
+      friendlies: '1800m',
+      civilians: 'None',
+      aircraft: 'F-16 with 4x GBU-38 (500 lb JDAM) ONLY',
+      weather: 'Clear'
+    },
+    rec: {
+      munition: 'GBU-38 (best of available)',
+      alternatives: [],
+      control_type: 'Type 2',
+      method_of_attack: 'BOC',
+      mark_method: 'No mark (BOC)',
+      nine_line: {
+        line_4: '380 ft MSL',
+        line_5: '4x T-72 in column, dispersed 100m, stationary',
+        line_6: '<grid> (CAT I) — multi-target Lines 4,6,8 follow',
+        line_7: 'No mark',
+        line_8: 'NW 1800m',
+        line_9: 'Egress south'
+      },
+      remarks: [
+        '⚠ MARGINAL EFFECTIVENESS — 500 lb JDAM rated MARGINAL vs MBT in matrix',
+        'Recommend hold for F-15E with 2000-lb class, or accept reduced effects',
+        'TOT push when ready'
+      ],
+      flags: ['MARGINAL_EFFECTIVENESS'],
+      reasoning: 'GBU-38 marginal vs MBT (matrix). 4 GBU-38 → 1 per tank. Direct hit lethal but near-miss may not defeat armor. System surfaces "hold for better fragged stack" as recommendation.'
+    },
+    grade_targets: ['munition', 'remarks'],
+    questions: [
+      'Do you actually engage with what\'s on station, or hold for better-fragged stack?',
+      'Per-target loadout depth: would you split into 2 GBU-38 per tank for mobility-kill chance?',
+      'When the system says "marginal," is that flag enough, or should it actively recommend "hold"?'
+    ]
+  }
+];
+
+const OPEN_QUESTIONS = [
+  {
+    id: 'Q1', topic: 'Munition tiebreakers',
+    body: 'When two munitions both rate "PREFERRED" against a target, what\'s your tiebreaker order? Our current stack is: (1) larger friendly safety margin, (2) smaller frag if civilians nearby, (3) more on station, (4) aircrew familiarity, (5) shorter time-to-target. Right order? Right list?'
+  },
+  {
+    id: 'Q2', topic: 'Civilian / protected-site → control type',
+    body: 'Doctrine doesn\'t explicitly say "civilians within 500m → Type 1." We applied it as a heuristic. Is this your unit\'s actual rule? Different rule? Situational?'
+  },
+  {
+    id: 'Q3', topic: 'PID confidence threshold',
+    body: 'We set the CNN classification confidence threshold at 0.85 (above = engageable, below = caveat). What\'s your gut number? Different for vehicles vs personnel? Different by PID corroboration sources?'
+  },
+  {
+    id: 'Q4', topic: 'Minimum observation duration',
+    body: 'We require 30 seconds of consistent classification before declaring PID. Is 30 seconds right? Different for movers vs stationary, vehicles vs personnel?'
+  },
+  {
+    id: 'Q5', topic: 'Self-defense override scope',
+    body: 'When friendlies are taking fire FROM a hospital, doctrine (CJCSI 3160.01 p.C-B-4) allows self-defense engagement. In practice, do you still wait for GFC initials? What\'s the actual procedure?'
+  },
+  {
+    id: 'Q6', topic: 'CAT-III TLE upper bound',
+    body: 'We reject anything worse than CAT III (~30m TLE) as not engageable. Do you sometimes engage at "TLE unknown" with an aircraft self-acquiring? Is CAT III a hard floor or a soft one?'
+  },
+  {
+    id: 'Q7', topic: 'Type 1 vs Type 2 default',
+    body: 'Given Type 1 is prohibited for JDAMs, in modern CAS how often do you actually use Type 1? Is Type 2 effectively the default for everything except gun runs and Hellfire?'
+  },
+  {
+    id: 'Q8', topic: 'Drone abort authority',
+    body: 'JFO ATTP extends abort authority to anyone in the chain. We assumed the drone operator + system can call ABORT if a fratricide condition develops. Correct? Or does abort have to come from a human only?'
+  },
+  {
+    id: 'Q9', topic: 'IP library',
+    body: 'In your deployments, were named Initial Points always pre-loaded for the area, or did you make them up tactically? Realistic library size? How does it scale to a new AOR?'
+  },
+  {
+    id: 'Q10', topic: 'Smoke / wind threshold',
+    body: 'Doctrine says smoke is most effective within 100m, generally OK ≤300m. At what wind speed do you stop using smoke as a primary mark?'
+  },
+  {
+    id: 'Q11', topic: 'MANPADS / AAA altitude floors',
+    body: 'For the demo, what plausible numbers should we use? E.g., "MANPADS engagement up to 12,000 ft AGL, so floor 13,000 ft." Theater-realistic?'
+  },
+  {
+    id: 'Q12', topic: 'Anything we got wrong overall',
+    body: 'Free space. What does this system get categorically wrong? What\'s missing? What would you not show a JTAC because it would erode their trust in the system?'
+  }
+];
+
+// ─────────────────────────────────────────────────────────────────────
+// STATE / PERSISTENCE
+// ─────────────────────────────────────────────────────────────────────
+
+const STORAGE_KEY = 'jtac_feedback_v1';
+function loadState() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
+  catch { return {}; }
+}
+function saveState(s) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+}
+let state = loadState();
+
+function setGrade(scenarioId, target, value) {
+  state.scenarios = state.scenarios || {};
+  state.scenarios[scenarioId] = state.scenarios[scenarioId] || { grades: {}, comments: {}, overall: null, openComment: '' };
+  state.scenarios[scenarioId].grades[target] = value;
+  saveState(state);
+}
+function setComment(scenarioId, target, value) {
+  state.scenarios = state.scenarios || {};
+  state.scenarios[scenarioId] = state.scenarios[scenarioId] || { grades: {}, comments: {}, overall: null, openComment: '' };
+  state.scenarios[scenarioId].comments[target] = value;
+  saveState(state);
+}
+function setOverall(scenarioId, value) {
+  state.scenarios = state.scenarios || {};
+  state.scenarios[scenarioId] = state.scenarios[scenarioId] || { grades: {}, comments: {}, overall: null, openComment: '' };
+  state.scenarios[scenarioId].overall = value;
+  saveState(state);
+}
+function setOpenComment(scenarioId, value) {
+  state.scenarios = state.scenarios || {};
+  state.scenarios[scenarioId] = state.scenarios[scenarioId] || { grades: {}, comments: {}, overall: null, openComment: '' };
+  state.scenarios[scenarioId].openComment = value;
+  saveState(state);
+}
+function setOpenQuestionAnswer(qid, value) {
+  state.openQuestions = state.openQuestions || {};
+  state.openQuestions[qid] = value;
+  saveState(state);
+}
+function setReviewer(name) {
+  state.reviewer = name;
+  saveState(state);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// RENDERING
+// ─────────────────────────────────────────────────────────────────────
+
+function el(tag, attrs={}, ...kids) {
+  const e = document.createElement(tag);
+  for (const k in attrs) {
+    const v = attrs[k];
+    if (v == null || v === false) continue;
+    if (k === 'class') e.className = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v);
+  }
+  for (const c of kids.flat()) {
+    if (c == null || c === false) continue;
+    e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+  }
+  return e;
+}
+
+function renderTabs() {
+  const nav = document.getElementById('tabnav');
+  nav.innerHTML = '';
+  const allTabs = [
+    ...SCENARIOS.map(s => ({ id: s.id, label: s.id })),
+    { id: 'OPEN', label: 'Open Q\'s' },
+    { id: 'REVIEWER', label: 'About you' }
+  ];
+  allTabs.forEach(t => {
+    const btn = el('button',
+      { class: `whitespace-nowrap px-3 py-1.5 text-sm rounded-md ${t.id === current ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-200'}`,
+        onclick: () => { current = t.id; render(); window.scrollTo(0,0); } },
+      t.label);
+    nav.appendChild(btn);
+  });
+}
+
+function renderGradeButtons(scenarioId, target) {
+  const cur = (state.scenarios?.[scenarioId]?.grades || {})[target];
+  const mk = (icon, val, color) =>
+    el('button', {
+      class: `grade-btn ${val === 'up' ? 'thumb-up' : val === 'down' ? 'thumb-down' : 'thumb-unsure'} ${cur === val ? 'selected' : ''}
+              border border-slate-300 rounded px-2 py-1 text-xs bg-white`,
+      onclick: () => { setGrade(scenarioId, target, cur === val ? null : val); render(); }
+    }, icon);
+  return el('div', { class: 'flex gap-1 items-center' },
+    mk('✓ Right', 'up'),
+    mk('✗ Wrong', 'down'),
+    mk('? Unsure', 'unsure')
+  );
+}
+
+function renderGradeRow(scenarioId, target, label) {
+  const cur = (state.scenarios?.[scenarioId]?.comments || {})[target] || '';
+  return el('div', { class: 'border-l-4 border-slate-200 pl-3 py-2 mb-2' },
+    el('div', { class: 'flex flex-wrap gap-2 items-center mb-1' },
+      el('span', { class: 'font-medium text-sm text-slate-700 mr-2' }, label),
+      renderGradeButtons(scenarioId, target)
+    ),
+    el('input', {
+      type: 'text', placeholder: 'Comment / correction (what would you change?)',
+      class: 'w-full text-sm px-2 py-1 border border-slate-200 rounded bg-slate-50',
+      value: cur,
+      oninput: (e) => setComment(scenarioId, target, e.target.value)
+    })
+  );
+}
+
+function renderNineLine(rec) {
+  if (!rec.nine_line) return el('div', { class: 'nine-line' }, 'NO 9-LINE — engagement blocked');
+  const nl = rec.nine_line;
+  const lines = [
+    ['L1 IP/BP', '— (filled by JTAC from named IP library)'],
+    ['L2 Heading', '— (filled by JTAC)'],
+    ['L3 Distance', '— (filled by JTAC)'],
+    ['L4 Target Elev.', nl.line_4],
+    ['L5 Target Desc.', nl.line_5],
+    ['L6 Target Loc.', nl.line_6],
+    ['L7 Mark', nl.line_7],
+    ['L8 Friendlies', nl.line_8],
+    ['L9 Egress', nl.line_9]
+  ];
+  return el('div', { class: 'nine-line' },
+    ...lines.map(([k, v]) => el('div', {}, el('span', { class: 'label' }, k.padEnd(18)), el('span', { class: 'value' }, ': ' + v))),
+    el('div', { class: 'mt-3 pt-3 border-t border-slate-700' },
+      el('span', { class: 'label' }, 'REMARKS:'),
+      ...rec.remarks.map(r => el('div', { class: r.startsWith('⚠') ? 'restriction ml-4' : 'value ml-4' }, '• ' + r))
+    )
+  );
+}
+
+function renderScenario(scenario) {
+  const s = scenario.situation;
+  const r = scenario.rec;
+  const sState = state.scenarios?.[scenario.id] || {};
+  const isBlocked = r.flags?.includes('NOT_ENGAGEABLE');
+
+  return el('article', { class: 'space-y-6' },
+
+    // header
+    el('div', { class: 'flex items-start justify-between gap-4' },
+      el('div', {},
+        el('div', { class: 'text-sm text-amber-600 font-semibold mono' }, 'SCENARIO ' + scenario.id),
+        el('h2', { class: 'text-2xl font-bold text-slate-900' }, scenario.title)
+      ),
+      sState.overall && el('div', { class: `badge ${sState.overall === 'confirm' ? 'badge-pref' : sState.overall === 'alter' ? 'badge-warn' : 'badge-block'}` },
+        sState.overall.toUpperCase())
+    ),
+
+    // SITUATION
+    el('section', { class: 'bg-white border border-slate-200 rounded-lg p-5' },
+      el('h3', { class: 'font-semibold text-slate-900 mb-3' }, '1. Situation (what the system sees)'),
+      el('dl', { class: 'grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-sm' },
+        ...Object.entries(s).flatMap(([k, v]) => [
+          el('dt', { class: 'font-medium text-slate-500 mono' }, k),
+          el('dd', { class: 'text-slate-800' }, v)
+        ])
+      )
+    ),
+
+    // RECOMMENDATION
+    el('section', { class: 'bg-white border border-slate-200 rounded-lg p-5' },
+      el('h3', { class: 'font-semibold text-slate-900 mb-3' },
+        '2. System recommendation',
+        isBlocked && el('span', { class: 'badge badge-block ml-2' }, 'BLOCKED')
+      ),
+      el('div', { class: 'grid grid-cols-1 md:grid-cols-2 gap-4' },
+        el('div', {},
+          el('div', { class: 'mb-3' },
+            el('div', { class: 'text-xs text-slate-500 uppercase tracking-wider' }, 'Munition'),
+            el('div', { class: 'text-lg font-semibold text-slate-900' }, r.munition)
+          ),
+          el('div', { class: 'mb-3' },
+            el('div', { class: 'text-xs text-slate-500 uppercase tracking-wider' }, 'Control type'),
+            el('div', { class: 'font-semibold' }, r.control_type)
+          ),
+          el('div', { class: 'mb-3' },
+            el('div', { class: 'text-xs text-slate-500 uppercase tracking-wider' }, 'Method of attack'),
+            el('div', { class: 'font-semibold' }, r.method_of_attack)
+          ),
+          el('div', { class: 'mb-3' },
+            el('div', { class: 'text-xs text-slate-500 uppercase tracking-wider' }, 'Mark method'),
+            el('div', { class: 'font-semibold' }, r.mark_method)
+          ),
+          r.alternatives.length > 0 && el('div', { class: 'mb-3' },
+            el('div', { class: 'text-xs text-slate-500 uppercase tracking-wider mb-1' }, 'Alternatives'),
+            ...r.alternatives.map(a => el('div', { class: 'text-sm text-slate-700 ml-2' }, '• ' + a.id + ' — ' + a.why))
+          )
+        ),
+        el('div', {}, renderNineLine(r))
+      ),
+      el('details', { class: 'mt-4' },
+        el('summary', { class: 'text-sm text-slate-600 hover:text-slate-900' }, 'Show reasoning trace'),
+        el('div', { class: 'mt-2 p-3 bg-slate-100 rounded text-sm text-slate-700 italic' }, r.reasoning)
+      )
+    ),
+
+    // PER-LINE GRADING
+    !isBlocked && el('section', { class: 'bg-white border border-slate-200 rounded-lg p-5' },
+      el('h3', { class: 'font-semibold text-slate-900 mb-3' }, '3. Grade each piece (✓ right / ✗ wrong / ? unsure + comment)'),
+      ...scenario.grade_targets.map(t => renderGradeRow(scenario.id, t, t.replace(/_/g, ' ')))
+    ),
+    isBlocked && el('section', { class: 'bg-white border border-slate-200 rounded-lg p-5' },
+      el('h3', { class: 'font-semibold text-slate-900 mb-3' }, '3. Grade the block decision'),
+      renderGradeRow(scenario.id, 'decision', 'Block decision (not engageable)'),
+      renderGradeRow(scenario.id, 'remedy', 'Recommended remedy (hold + corroborate)')
+    ),
+
+    // OVERALL GRADE
+    el('section', { class: 'bg-white border border-slate-200 rounded-lg p-5' },
+      el('h3', { class: 'font-semibold text-slate-900 mb-3' }, '4. Overall — would you transmit this 9-line?'),
+      el('div', { class: 'flex gap-2' },
+        ...[
+          ['confirm', 'CONFIRM (transmit as-is)', 'bg-green-600 hover:bg-green-700'],
+          ['alter', 'ALTER (with my edits)', 'bg-amber-500 hover:bg-amber-600'],
+          ['deny', 'DENY (do not engage)', 'bg-red-600 hover:bg-red-700']
+        ].map(([val, label, color]) => {
+          const isCur = sState.overall === val;
+          return el('button',
+            { class: `${isCur ? color + ' text-white scale-105' : 'bg-white text-slate-700 hover:bg-slate-100'} border border-slate-300 px-4 py-2 rounded-md text-sm font-semibold transition`,
+              onclick: () => { setOverall(scenario.id, isCur ? null : val); render(); } },
+            label
+          );
+        })
+      )
+    ),
+
+    // SPECIFIC QUESTIONS
+    el('section', { class: 'bg-amber-50 border border-amber-200 rounded-lg p-5' },
+      el('h3', { class: 'font-semibold text-slate-900 mb-3' }, '5. What we want from you on this scenario'),
+      el('ul', { class: 'list-disc list-inside text-sm text-slate-800 space-y-1 mb-3' },
+        ...scenario.questions.map(q => el('li', {}, q))
+      ),
+      el('textarea', {
+        rows: '4',
+        placeholder: 'Your answers / observations / corrections...',
+        class: 'w-full text-sm px-3 py-2 border border-amber-300 rounded bg-white',
+        oninput: (e) => setOpenComment(scenario.id, e.target.value)
+      }, sState.openComment || '')
+    )
+  );
+}
+
+function renderOpenQuestions() {
+  return el('article', { class: 'space-y-4' },
+    el('h2', { class: 'text-2xl font-bold text-slate-900' }, 'Open doctrinal questions'),
+    el('p', { class: 'text-slate-600' }, 'Things doctrine doesn\'t fully answer. Your gut and unit experience are what we need here. Skip any you don\'t have a strong answer to.'),
+    ...OPEN_QUESTIONS.map(q => el('section', { class: 'bg-white border border-slate-200 rounded-lg p-5' },
+      el('div', { class: 'text-xs text-amber-600 font-semibold mono mb-1' }, q.id + ' — ' + q.topic),
+      el('p', { class: 'text-slate-800 mb-3' }, q.body),
+      el('textarea', {
+        rows: '3',
+        placeholder: 'Your answer...',
+        class: 'w-full text-sm px-3 py-2 border border-slate-300 rounded bg-slate-50',
+        oninput: (e) => setOpenQuestionAnswer(q.id, e.target.value)
+      }, (state.openQuestions || {})[q.id] || '')
+    ))
+  );
+}
+
+function renderReviewer() {
+  return el('article', { class: 'space-y-4' },
+    el('h2', { class: 'text-2xl font-bold text-slate-900' }, 'About you'),
+    el('p', { class: 'text-slate-600' }, 'Helps us weight the feedback. Optional but useful.'),
+    el('section', { class: 'bg-white border border-slate-200 rounded-lg p-5 space-y-4' },
+      el('div', {},
+        el('label', { class: 'text-sm text-slate-700 font-medium' }, 'Name / call sign'),
+        el('input', {
+          type: 'text', class: 'w-full mt-1 px-3 py-2 border border-slate-300 rounded text-sm',
+          value: (state.reviewer && state.reviewer.name) || '',
+          oninput: (e) => { state.reviewer = state.reviewer || {}; state.reviewer.name = e.target.value; saveState(state); }
+        })
+      ),
+      el('div', {},
+        el('label', { class: 'text-sm text-slate-700 font-medium' }, 'Service / unit'),
+        el('input', {
+          type: 'text', class: 'w-full mt-1 px-3 py-2 border border-slate-300 rounded text-sm',
+          value: (state.reviewer && state.reviewer.unit) || '',
+          oninput: (e) => { state.reviewer = state.reviewer || {}; state.reviewer.unit = e.target.value; saveState(state); }
+        })
+      ),
+      el('div', {},
+        el('label', { class: 'text-sm text-slate-700 font-medium' }, 'Years as JTAC / FAC(A) / JFO'),
+        el('input', {
+          type: 'text', class: 'w-full mt-1 px-3 py-2 border border-slate-300 rounded text-sm',
+          value: (state.reviewer && state.reviewer.years) || '',
+          oninput: (e) => { state.reviewer = state.reviewer || {}; state.reviewer.years = e.target.value; saveState(state); }
+        })
+      ),
+      el('div', {},
+        el('label', { class: 'text-sm text-slate-700 font-medium' }, 'Most relevant deployment context (e.g., OEF Afghanistan 2014, OIR Syria 2018)'),
+        el('input', {
+          type: 'text', class: 'w-full mt-1 px-3 py-2 border border-slate-300 rounded text-sm',
+          value: (state.reviewer && state.reviewer.context) || '',
+          oninput: (e) => { state.reviewer = state.reviewer || {}; state.reviewer.context = e.target.value; saveState(state); }
+        })
+      )
+    )
+  );
+}
+
+let current = SCENARIOS[0].id;
+
+function render() {
+  renderTabs();
+  const main = document.getElementById('main');
+  main.innerHTML = '';
+  if (current === 'OPEN') main.appendChild(renderOpenQuestions());
+  else if (current === 'REVIEWER') main.appendChild(renderReviewer());
+  else {
+    const sc = SCENARIOS.find(s => s.id === current);
+    main.appendChild(renderScenario(sc));
+  }
+}
+
+// EXPORT / RESET
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const name = (state.reviewer?.name || 'reviewer').replace(/\W+/g, '_');
+  a.href = url; a.download = `jtac_feedback_${name}_${new Date().toISOString().slice(0,10)}.json`; a.click();
+  URL.revokeObjectURL(url);
+});
+document.getElementById('copyBtn').addEventListener('click', async () => {
+  await navigator.clipboard.writeText(JSON.stringify(state, null, 2));
+  const b = document.getElementById('copyBtn');
+  const orig = b.textContent;
+  b.textContent = '✓ Copied';
+  setTimeout(() => b.textContent = orig, 1500);
+});
+document.getElementById('resetBtn').addEventListener('click', () => {
+  if (confirm('Reset all feedback? This cannot be undone.')) {
+    state = {};
+    localStorage.removeItem(STORAGE_KEY);
+    render();
+  }
+});
+
+render();
+</script>
+</body>
+</html>

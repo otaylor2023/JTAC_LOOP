@@ -1,0 +1,214 @@
+# Target × Munition effectiveness matrix
+#
+# This is the core "what should we shoot at this?" lookup. Rows are doctrinal target categories;
+# columns are munition classes. Cells use a qualitative rating ladder:
+#
+#   PREFERRED   = doctrine recommends this combo as primary choice
+#   ACCEPTABLE  = will work, not optimal
+#   MARGINAL    = degraded effectiveness (e.g., LGB on a fast mover)
+#   NOT_REC     = doctrine does not recommend (overkill, mismatched effects, or wasted)
+#   PROHIBITED  = doctrine or ROE blocks
+#
+# Sources synthesized from:
+#   AFTTP 3-3.JTAC §6.3 / §6.4 (target taxonomy and weapon-target matching)
+#   JFIRE 2016 (target-to-weapon matrix concepts)
+#   JP 3-09.3 V (CAS examples)
+#   ATP 3-06.1 (urban-specific recommendations)
+#
+# IMPORTANT: Doctrine in unclassified publications gives QUALITATIVE recommendations only.
+# The numeric 0-1 effectiveness scores in the planning doc are NOT in published unclassified doctrine
+# (real values live in JMEM, classified). This matrix is intentionally qualitative until tuned with Collen.
+#
+# ─── COLUMN HEADERS (munition classes) ────────────────────────────────────
+# bomb_lgb_500     = GBU-12 family (laser, 500 lb)
+# bomb_lgb_2000    = GBU-10/16 family (laser, 1000-2000 lb)
+# bomb_jdam_500    = GBU-38, GBU-54 (GPS, 500 lb)
+# bomb_jdam_2000   = GBU-31, GBU-32 (GPS, 1000-2000 lb)
+# bomb_jdam_pen    = GBU-31(V)3 BLU-109 (penetrator)
+# bomb_sdb         = GBU-39 (250 lb)
+# bomb_sdb_flm     = GBU-39 FLM (focused lethality)
+# bomb_unguided    = Mk-82/83/84
+# missile_atgm_l   = AGM-114 K/N/R Hellfire (laser)
+# missile_iir      = AGM-65 D/G/H Maverick (IR)
+# rocket_apkws     = APKWS laser-guided 70 mm
+# rocket_unguided  = 70mm Hydra unguided
+# gun_30mm         = GAU-8 (A-10) and similar
+# gun_20mm         = M61 internal
+# missile_thermo   = AGM-114N thermobaric
+
+target_classes:
+
+  # ─── PERSONNEL ─────────────────────────────────────────────────────────
+  personnel_open:
+    description: "Dismounted infantry in open terrain, no cover"
+    recommendations:
+      bomb_lgb_500:    ACCEPTABLE
+      bomb_jdam_500:   ACCEPTABLE
+      bomb_sdb:        PREFERRED   # smaller frag, sufficient effect on soft target
+      bomb_sdb_flm:    PREFERRED
+      bomb_unguided:   MARGINAL    # only if no civilians/friendlies near
+      missile_atgm_l:  ACCEPTABLE
+      rocket_apkws:    PREFERRED
+      rocket_unguided: ACCEPTABLE
+      gun_30mm:        PREFERRED   # classic A-10 employment
+      gun_20mm:        PREFERRED
+      bomb_lgb_2000:   NOT_REC     # overkill, wasted frag
+      bomb_jdam_2000:  NOT_REC
+
+  personnel_concentrated:
+    description: "Multiple dismounted infantry in tight grouping, possibly in compound or building"
+    recommendations:
+      bomb_lgb_500:    PREFERRED
+      bomb_jdam_500:   PREFERRED
+      bomb_sdb:        PREFERRED
+      bomb_sdb_flm:    PREFERRED
+      missile_atgm_l:  ACCEPTABLE
+      missile_thermo:  PREFERRED   # if in structure
+      rocket_apkws:    ACCEPTABLE
+      gun_30mm:        ACCEPTABLE
+      bomb_unguided:   MARGINAL
+
+  personnel_dug_in:
+    description: "Infantry in fighting positions, fox holes, dug-in trenches"
+    recommendations:
+      bomb_lgb_500:    ACCEPTABLE  # contact fuze less effective vs dug-in
+      bomb_jdam_500:   PREFERRED   # airburst over the position
+      bomb_sdb:        ACCEPTABLE
+      missile_atgm_l:  MARGINAL
+      missile_iir:     MARGINAL
+      gun_30mm:        ACCEPTABLE
+
+  personnel_in_cave_or_building:
+    description: "Personnel inside cave, hardened structure, or building"
+    recommendations:
+      missile_thermo:  PREFERRED   # AGM-114N — ATP 3-06.1 p.49 explicit recommendation
+      bomb_lgb_2000:   ACCEPTABLE  # delay fuze
+      bomb_jdam_pen:   PREFERRED   # for hardened
+      bomb_jdam_2000:  ACCEPTABLE  # delay fuze
+      bomb_unguided:   NOT_REC
+
+  # ─── VEHICLES ───────────────────────────────────────────────────────────
+  vehicle_wheeled_soft:
+    description: "Pickup truck, technical, civilian-grade soft-skin vehicle"
+    recommendations:
+      bomb_lgb_500:    PREFERRED
+      bomb_jdam_500:   PREFERRED
+      bomb_sdb:        PREFERRED
+      missile_atgm_l:  PREFERRED
+      missile_iir:     PREFERRED
+      rocket_apkws:    PREFERRED
+      gun_30mm:        PREFERRED
+      gun_20mm:        ACCEPTABLE
+      bomb_lgb_2000:   NOT_REC
+      bomb_jdam_2000:  NOT_REC
+
+  vehicle_wheeled_soft_moving:
+    description: "Soft-skin vehicle in motion (above walking pace)"
+    recommendations:
+      missile_atgm_l:  PREFERRED   # buddy-lase for movers
+      missile_iir:     PREFERRED   # autonomous IIR seeker
+      bomb_lgb_500:    MARGINAL    # laser harder on movers (AFTTP 6.3.4)
+      bomb_jdam_500:   NOT_REC     # GPS-only fails on movers
+      gbu_54_LJDAM:    PREFERRED   # GPS+laser hybrid for movers
+      gun_30mm:        PREFERRED
+      rocket_unguided: MARGINAL
+
+  vehicle_tracked_light:
+    description: "BMP, BRDM, light APC, lightly armored tracked vehicle"
+    recommendations:
+      bomb_lgb_500:    PREFERRED
+      bomb_jdam_500:   PREFERRED
+      missile_atgm_l:  PREFERRED
+      missile_iir:     PREFERRED
+      gun_30mm:        PREFERRED   # A-10 30mm penetrates light armor
+      bomb_sdb:        ACCEPTABLE
+      gun_20mm:        MARGINAL
+
+  vehicle_tracked_armor:
+    description: "Main battle tank class (T-72 etc.), heavily armored tracked"
+    recommendations:
+      missile_atgm_l:  PREFERRED   # Hellfire shaped charge
+      missile_iir:     PREFERRED   # Maverick shaped charge / heavy warhead
+      bomb_lgb_500:    MARGINAL    # 500 lb may not defeat armor on near miss
+      bomb_lgb_2000:   PREFERRED
+      bomb_jdam_2000:  PREFERRED   # direct hit lethal
+      gun_30mm:        ACCEPTABLE  # GAU-8 from above can penetrate top armor
+      bomb_sdb:        NOT_REC     # 250 lb insufficient
+
+  vehicle_tracked_heavy_armor:
+    description: "Modern MBT with reactive armor, hardened command vehicle"
+    recommendations:
+      missile_atgm_l:  PREFERRED   # top-attack profile, tandem charge
+      bomb_jdam_2000:  PREFERRED
+      bomb_jdam_pen:   PREFERRED
+      bomb_lgb_2000:   ACCEPTABLE
+      bomb_lgb_500:    NOT_REC
+
+  # ─── STRUCTURES ─────────────────────────────────────────────────────────
+  structure_soft:
+    description: "Wood/light masonry building, residential or commercial small structure"
+    recommendations:
+      bomb_lgb_500:    PREFERRED
+      bomb_jdam_500:   PREFERRED
+      bomb_sdb:        PREFERRED
+      missile_thermo:  PREFERRED
+      missile_atgm_l:  PREFERRED
+      missile_iir:     PREFERRED
+      bomb_unguided:   MARGINAL
+      gun_30mm:        ACCEPTABLE
+
+  structure_hardened:
+    description: "Reinforced concrete, multi-story commercial / industrial"
+    recommendations:
+      bomb_jdam_pen:   PREFERRED
+      bomb_lgb_2000:   PREFERRED
+      bomb_jdam_2000:  PREFERRED
+      bomb_lgb_500:    MARGINAL
+      missile_atgm_l:  MARGINAL
+
+  bunker_unhardened:
+    description: "Sandbag, light overhead cover bunker"
+    recommendations:
+      bomb_lgb_500:    PREFERRED
+      bomb_jdam_500:   PREFERRED
+      missile_atgm_l:  PREFERRED
+      missile_thermo:  PREFERRED
+      bomb_sdb:        ACCEPTABLE
+
+  bunker_hardened:
+    description: "Reinforced concrete bunker, command post, hardened C2 node"
+    recommendations:
+      bomb_jdam_pen:   PREFERRED
+      bomb_lgb_2000:   ACCEPTABLE
+      bomb_jdam_2000:  ACCEPTABLE  # with delay fuze
+      bomb_lgb_500:    NOT_REC
+      bomb_jdam_500:   NOT_REC
+
+  # ─── BOATS ──────────────────────────────────────────────────────────────
+  light_boat:
+    description: "Small craft, RHIB, dhow, fast attack boat"
+    recommendations:
+      missile_atgm_l:  PREFERRED
+      rocket_apkws:    PREFERRED
+      rocket_unguided: ACCEPTABLE
+      gun_30mm:        PREFERRED
+      gun_20mm:        ACCEPTABLE
+
+# ─── SECONDARY TIEBREAKERS ─────────────────────────────────────────────────
+# Applied AFTER pulling preferred/acceptable list for the target. In order:
+tiebreakers:
+  - 1_friendly_safety:
+      description: "Larger margin between RED and friendly distance preferred"
+      direction: "maximize friendly_distance - red_standing"
+  - 2_collateral_damage:
+      description: "Smaller frag radius preferred when civilians/protected sites in vicinity"
+      direction: "minimize red_standing"
+  - 3_loadout_depth:
+      description: "Prefer munitions the aircraft has more of (preserves capability for follow-on engagements)"
+      direction: "maximize quantity_on_station"
+  - 4_aircrew_familiarity:
+      description: "Slight bias toward weapons the responding aircraft is most fragged for"
+      direction: "favor primary_loadout"
+  - 5_time_to_target:
+      description: "If target is time-sensitive, prefer munition with shorter weapon flight time"
+      direction: "minimize tot_seconds"

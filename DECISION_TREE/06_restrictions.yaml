@@ -1,0 +1,226 @@
+# Tree 6 — Restriction Enumeration
+#
+# A flat list of conditional flags. Each fires independently if its condition is met.
+# Output is a list of restriction strings appended to the 9-line remarks (after Line 9).
+#
+# All restrictions in the 9-line are MANDATORY READBACK per JP 3-09.3 V-31, V-33.
+
+tree: restriction_enumeration
+version: 1.0
+
+inputs:
+  - munition                           # selected munition + fuze
+  - friendly_distance_m
+  - protected_sites_in_range
+  - weather
+  - threats                            # list of {type, position, range_m}
+  - friendly_artillery_active          # bool
+  - friendly_artillery_GTL             # gun-target line if active
+  - other_aircraft_on_station          # list of call signs + altitudes
+  - control_type                       # Type 1 | 2 | 3
+  - method_of_attack                   # BOT | BOC
+  - mark_method                        # laser | ir_pointer | smoke | talk_on | none
+  - LTL_deg_magnetic                   # if laser
+  - position_uncertainty_m
+  - target_movement_state              # stationary | slow | fast
+  - tot_strategy                       # push | immediate | scheduled
+  - target_is_time_sensitive           # bool
+  - urban_environment                  # bool
+  - night_operation                    # bool
+  - recent_civilian_casualty_in_area   # bool — triggers extra caution
+
+# ──────────────────────────────────────────────────────────────────────────
+# FLAG NODES (each fires independently if condition met)
+# ──────────────────────────────────────────────────────────────────────────
+
+flags:
+
+  # ─── DANGER CLOSE ──────────────────────────────────────────────────────
+  - id: danger_close
+    plain_language: "Friendlies inside the weapon's danger-close distance."
+    condition: "friendly_distance_m <= munition.red_standing_m"
+    output:
+      restriction: "DANGER CLOSE — initials <GFC_INITIALS> required"
+      mandatory_readback: true
+      additional_actions:
+        - require_type_1_control_if_viable
+        - prefer_weapon_axis_parallel_to_friendly_axis
+    citation: "JP 3-09.3 III-36"
+
+  # ─── FAH (Final Attack Heading) ────────────────────────────────────────
+  - id: fah_from_laser
+    plain_language: "If laser-guided weapon, restrict aircraft attack heading to laser acquisition cone."
+    condition: "munition.guidance == 'laser' AND mark_method == 'laser_designation'"
+    output:
+      restriction: "FAH <fah_low>-<fah_high> clockwise"
+      compute: "fah_low = (LTL + 10) mod 360; fah_high = (LTL + 60) mod 360"
+      mandatory_readback: true
+    citation: "JFO ATTP ¶1-152 to 1-154; JP 3-09.3 III-81 warning"
+
+  - id: fah_friendly_safety
+    plain_language: "If friendlies are close, force attack heading parallel to friendly orientation."
+    condition: "friendly_distance_m < munition.red_standing_m * 1.5"
+    output:
+      restriction: "FAH parallel to friendly axis (<friendly_axis_deg>) ± 30° to reduce long/short fratricide risk"
+      mandatory_readback: true
+    citation: "JP 3-09.3 III-36"
+
+  - id: fah_collateral_avoidance
+    plain_language: "If a Cat II protected site is in the danger zone, force attack heading away from it."
+    condition: "any_cat_ii_protected_site_in_2_cep_radius"
+    output:
+      restriction: "FAH parallel to and away from <site_type> at <bearing>"
+      mandatory_readback: true
+    citation: "CJCSI 3160.01 Table D-A-1 Note 4"
+
+  # ─── LTL (Laser-to-Target Line) ────────────────────────────────────────
+  - id: ltl_in_remarks
+    plain_language: "Pass LTL azimuth in remarks whenever laser is in use."
+    condition: "mark_method == 'laser_designation'"
+    output:
+      remark: "LTL <LTL_deg_magnetic>M"
+      mandatory_readback: false
+    citation: "JP 3-09.3 III-81 warning; V-31"
+
+  # ─── THREATS / SEAD ────────────────────────────────────────────────────
+  - id: surface_to_air_threat
+    plain_language: "Surface-to-air threat in range of attacking aircraft route."
+    condition: "any threat in threats where threat.range_m intersects aircraft_route"
+    output:
+      remark: "Threat: <threat.type> at <threat.bearing>/<threat.distance_m>m, suppression: <continuous|interrupted|none>"
+      mandatory_readback: false
+    citation: "JP 3-09.3 V-30"
+
+  - id: manpads_floor
+    plain_language: "If MANPADS active, advise minimum altitude for aircraft."
+    condition: "any threat in threats where threat.type == 'MANPADS'"
+    output:
+      remark: "MANPADS active — recommended floor <alt> AGL"
+      mandatory_readback: false
+      open_question_for_collen: "Numeric MANPADS floor — pull from theater SPINS, not generic doctrine"
+
+  # ─── FRIENDLY FIRES DECONFLICTION ──────────────────────────────────────
+  - id: friendly_artillery_active
+    plain_language: "Friendly artillery is firing — deconflict aircraft from gun-target line."
+    condition: "friendly_artillery_active == true"
+    output:
+      remark: "Friendly artillery active, GTL <bearing>/<distance>; stay <direction> of GTL"
+      mandatory_readback: false
+    citation: "JP 3-09.3 V-30"
+
+  - id: other_aircraft_deconfliction
+    plain_language: "Other aircraft on station — pass call signs and altitudes."
+    condition: "len(other_aircraft_on_station) > 0"
+    output:
+      remark: "Deconflict with <call_signs_with_altitudes>"
+      mandatory_readback: false
+    citation: "JP 3-09.3 V-14"
+
+  # ─── POSITION UNCERTAINTY / TLE ────────────────────────────────────────
+  - id: high_position_uncertainty
+    plain_language: "Coordinates have material error — recommend laser over GPS."
+    condition: "position_uncertainty_m > 10"
+    output:
+      remark: "TLE <category> — recommend laser guidance over GPS"
+      mandatory_readback: false
+    citation: "JFO ATTP ¶1-134"
+
+  # ─── TARGET INFO ───────────────────────────────────────────────────────
+  - id: moving_target
+    plain_language: "Target is moving — pass time stamp + speed + direction."
+    condition: "target_movement_state in ['slow', 'fast']"
+    output:
+      remark: "Moving target: <speed> kts, heading <bearing>, time stamp <UTC>"
+      mandatory_readback: false
+    citation: "JP 3-09.3 V-28"
+
+  # ─── COLLATERAL DAMAGE / CDE ───────────────────────────────────────────
+  - id: cde_elevated
+    plain_language: "Cat II protected facility within munition's danger circle."
+    condition: "any cat_ii_protected_site within munition.red_standing_m"
+    output:
+      restriction: "CDE elevated — <site_type> at <distance>m bearing <bearing>"
+      mandatory_readback: true
+
+  - id: cde_level_5_dual_use
+    plain_language: "Dual-use target — auto-escalates to Level 5 (SecDef/POTUS unless delegated)."
+    condition: "target.dual_use == true"
+    output:
+      restriction: "DUAL-USE TARGET — Level 5 escalation pending"
+      mandatory_readback: true
+      block_until: "elevated_authority_received"
+    citation: "CJCSI 3160.01 p.D-A-30, p.D-A-35"
+
+  - id: recent_civilian_casualty_caution
+    plain_language: "Recent BDA showed civilian casualties in this area — extra caution."
+    condition: "recent_civilian_casualty_in_area == true"
+    output:
+      remark: "Increased CDE caution — recent engagement in area resulted in civilian casualties"
+      mandatory_readback: false
+
+  # ─── URBAN-SPECIFIC ────────────────────────────────────────────────────
+  - id: urban_munition_recommendation
+    plain_language: "Urban environment — recommend delay-fuze + smaller frag."
+    condition: "urban_environment == true"
+    output:
+      remark: "Urban CDE: prefer delay fuze; consider GBU-39 SDB or AGM-114N"
+      mandatory_readback: false
+    citation: "ATP 3-06.1 p.49"
+
+  - id: urban_attack_heading
+    plain_language: "Urban: restrict attack heading away from civilian areas."
+    condition: "urban_environment == true"
+    output:
+      restriction: "Attack heading parallel to and away from <civilian_district>"
+      mandatory_readback: true
+    citation: "ATP 3-06.1 Note 4"
+
+  # ─── NIGHT-SPECIFIC ────────────────────────────────────────────────────
+  - id: nvd_capability_flag
+    plain_language: "Night op — confirm aircrew NVD capability."
+    condition: "night_operation == true"
+    output:
+      remark: "NVD capable: <yes/no>; friendly mark: IR strobe"
+      mandatory_readback: false
+    citation: "JP 3-09.3 V-30"
+
+  # ─── TIMING ────────────────────────────────────────────────────────────
+  - id: tot_strategy
+    plain_language: "Time On Target strategy. Always last item in remarks (marks end of brief)."
+    condition: "always (terminal element)"
+    output:
+      restriction:
+        if tot_strategy == "push": "TOT push when ready"
+        elif tot_strategy == "immediate": "TOT immediate"
+        elif tot_strategy == "scheduled": "TOT <UTC>"
+      mandatory_readback: true  # TOT/TTT always readback
+    citation: "JP 3-09.3 V-32, V-33"
+
+# ──────────────────────────────────────────────────────────────────────────
+# OUTPUT FORMAT
+# ──────────────────────────────────────────────────────────────────────────
+
+output_format:
+  ordering:
+    1: laser_to_target_line                # if laser
+    2: desired_ordnance_or_effects
+    3: surface_to_air_threats              # type, dist, suppression, GTL
+    4: additional_fires_on_battlefield     # friendly artillery
+    5: additional_radio_calls_requested    # IP inbound, IN call, time to roll-in
+    6: hazards_weather_TLE_NVD             # additional context
+    7: PLA_post_launch_abort               # if approved
+    8: danger_close                        # restriction
+    9: ACAs                                # airspace coordination areas
+    10: FAH                                # final attack heading
+    11: lateral_altitude_separation
+    12: approval_out_of_BP                 # rotary wing
+    13: TOT_or_TTT                         # always last
+  citation: "JP 3-09.3 V-30 to V-32 (recommended order)"
+
+  rendering:
+    template: |
+      ## REMARKS
+      {non_restriction_flags joined by newline}
+
+      ## RESTRICTIONS (mandatory readback)
+      {restriction_flags joined by newline}

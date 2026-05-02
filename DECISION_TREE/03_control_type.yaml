@@ -1,0 +1,167 @@
+# Tree 3 — Control Type (Type 1, Type 2, Type 3)
+#
+# How tightly does the JTAC supervise each weapons release?
+#   TYPE 1: JTAC has visual on attacking aircraft AND target. Issues "CLEARED HOT" per attack.
+#   TYPE 2: JTAC controls each release but cannot visually acquire aircraft and/or target. Issues "CLEARED HOT" per attack.
+#   TYPE 3: JTAC clears multiple attacks within a single engagement window with set restrictions. Issues "CLEARED TO ENGAGE."
+#
+# Doctrinal source: JP 3-09.3 III-42 to III-46.
+
+tree: control_type_selection
+version: 1.0
+
+inputs:
+  - jtac_visual_on_target          # bool — does the controlling JTAC have visual?
+  - jtac_visual_on_aircraft        # bool — same, for the responding aircraft?
+  - drone_target_visual            # bool — drone has target in sensor (alternative remote source)
+  - munition_guidance              # gps | gps_laser | laser | iir | ballistic
+  - friendlies_within_600m         # bool — danger close range trigger
+  - civilians_within_500m          # bool — Cat I or Cat II protected within close radius
+  - multi_target_engagement_window # bool — multiple targets to attack in single window
+  - target_environment             # urban | rural | mixed
+  - night_operation                # bool
+
+# ──────────────────────────────────────────────────────────────────────────
+# HARD RULES (apply first, before defaults)
+# ──────────────────────────────────────────────────────────────────────────
+
+hard_rules:
+
+  - id: gps_munition_blocks_type_1
+    plain_language: "If the weapon is GPS-guided, Type 1 is forbidden by doctrine."
+    rule: |
+      if munition_guidance in [gps, gps_laser]:
+        BLOCK Type_1
+        REQUIRE Type_2 OR Type_3
+    citation: "JP 3-09.3 III-43 note (verbatim): 'Due to the guidance of GPS or inertial navigation systems
+              (INS) weapons, deliveries of GPS or INS guided weapons should not be controlled under Type 1.'"
+
+  - id: type_1_requires_dual_visual
+    plain_language: "Type 1 requires the JTAC to see BOTH the target AND the responding aircraft."
+    rule: |
+      if Type_1_candidate AND (NOT jtac_visual_on_target OR NOT jtac_visual_on_aircraft):
+        DROP Type_1 → DOWNGRADE to Type_2
+    citation: "JP 3-09.3 III-43 to III-44"
+
+  - id: type_3_requires_explicit_authority
+    plain_language: "Type 3 multi-attack control needs explicit authority from the supported commander."
+    rule: |
+      if NOT supported_commander_authorized_type_3:
+        BLOCK Type_3
+    citation: "JP 3-09.3 III-43 (senior commanders may impose restrictions on TAC type)"
+
+# ──────────────────────────────────────────────────────────────────────────
+# DECISION CASCADE (after hard rules)
+# ──────────────────────────────────────────────────────────────────────────
+
+decision_cascade:
+
+  - id: civilians_proximity_check
+    plain_language: "Are civilians within 500 m of the target?"
+    rationale: |
+      Per planning-doc convention NOT explicitly in JP 3-09.3 — flagged for Collen review.
+      Default heuristic: civilian proximity favors tightest control (Type 1).
+    rule: |
+      if civilians_within_500m == true AND Type_1 still viable:
+        SELECT Type_1
+        REQUIRE: jtac_visual_on_aircraft + jtac_visual_on_target
+    open_question_for_collen: "Is civilian-proximity-forces-Type-1 your unit's actual rule, or theater-specific?"
+
+  - id: danger_close_check
+    plain_language: "Are friendlies inside 600 m of the target?"
+    rationale: |
+      For artillery/mortars, 600 m is the doctrinal danger close trigger (ATP 3-09.30 ¶4-35).
+      For air-delivered munitions, the trigger is the per-munition RED standing distance.
+      In either case, danger close pushes the controller toward tightest available control.
+    rule: |
+      if friendlies_within_600m AND Type_1 viable:
+        SELECT Type_1
+      elif friendlies_within_RED AND Type_1 NOT viable:
+        SELECT Type_2 with flag "DANGER CLOSE under Type 2 — GFC initials required"
+    citation: "ATP 3-09.30 ¶4-35; JP 3-09.3 III-36"
+
+  - id: drone_only_sensor_default
+    plain_language: "If the JTAC can't see the target directly, can the drone be the eyes?"
+    rationale: |
+      Type 2 explicitly allows the JTAC to use 'targeting data from another asset with accurate real-time
+      targeting information.' Our drone qualifies — this is the canonical use case for Type 2.
+    rule: |
+      if NOT jtac_visual_on_target AND drone_target_visual:
+        SELECT Type_2
+        annotate: "Type 2 — drone serves as remote sensor for JTAC"
+    citation: "JP 3-09.3 III-45 (verbatim): 'JTAC/FAC(A) is unable to visually acquire the target...
+              must visually acquire the target OR utilize targeting data from another asset with
+              accurate real-time targeting information.'"
+
+  - id: multi_target_window
+    plain_language: "Multiple targets to engage in a single engagement window?"
+    rule: |
+      if multi_target_engagement_window AND supported_commander_authorized_type_3:
+        SELECT Type_3
+        REQUIRE: explicit attack restrictions in 9-line remarks (time window, geographic boundary, FAH, target set)
+        FLAG: "Type 3 — elevated approval"
+    citation: "JP 3-09.3 III-46"
+
+  - id: degraded_conditions_default
+    plain_language: "Night, weather, or high standoff degrade JTAC visual acquisition?"
+    rule: |
+      if night_operation OR weather_degrades_visual OR standoff_high:
+        DEFAULT Type_2  # JP 3-09.3 III-45 lists these as 'typical drivers' for Type 2
+    citation: "JP 3-09.3 III-45"
+
+# ──────────────────────────────────────────────────────────────────────────
+# FALLBACK / DEFAULT
+# ──────────────────────────────────────────────────────────────────────────
+
+default:
+  selection: Type_2
+  rationale: |
+    For our drone-as-sensor architecture, Type 2 is the canonical default. The JTAC remotely
+    monitors via drone video (VDL/ROVER), retains control of each attack, and clears each release
+    individually. Type 1 is rare (requires dual visual). Type 3 requires elevated authority.
+
+# ──────────────────────────────────────────────────────────────────────────
+# OUTPUTS PER TYPE — what the system populates downstream
+# ──────────────────────────────────────────────────────────────────────────
+
+per_type_outputs:
+
+  Type_1:
+    method_of_attack_default: BOT  # BOC discouraged when JTAC has visual
+    clearance_call: "CLEARED HOT"
+    abort_call: "ABORT"
+    required_readbacks: [line_4_target_elevation, line_6_target_location, all_restrictions]
+    additional_remarks_required: []
+
+  Type_2:
+    method_of_attack_default: BOC  # canonical pairing for GPS-guided + remote sensor
+    clearance_call: "CLEARED HOT"
+    abort_call: "ABORT"
+    required_readbacks: [line_4_target_elevation, line_6_target_location, all_restrictions]
+    additional_remarks_required: [final_attack_heading_recommended]
+
+  Type_3:
+    method_of_attack_default: BOC
+    clearance_call: "CLEARED TO ENGAGE"  # ONLY Type 3 uses this
+    aircrew_calls_required: [COMMENCING_ENGAGEMENT, ENGAGEMENT_COMPLETE]
+    abort_call: "ABORT"
+    required_readbacks: [line_4_target_elevation, line_6_target_location, all_restrictions]
+    additional_remarks_required:
+      - engagement_time_window
+      - geographic_boundary
+      - final_attack_heading
+      - specific_target_set_only
+
+# ──────────────────────────────────────────────────────────────────────────
+# REASONING TRACE
+# ──────────────────────────────────────────────────────────────────────────
+
+trace:
+  record:
+    - hard_rules_fired: list
+    - cascade_path: ordered list of nodes that fired
+    - selection: Type_1 | Type_2 | Type_3
+    - downgrades_applied: list  # e.g., "Type 1 dropped because no visual on aircraft"
+    - reasoning_paragraph: |
+        "Selected Type {N} control because {reason}. Method of attack: {BOT/BOC}.
+         Clearance call: {phrase}. Required readbacks: {list}. Additional restrictions in remarks: {list}."

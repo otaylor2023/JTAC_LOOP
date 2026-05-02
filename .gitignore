@@ -1,0 +1,36 @@
+# Source manuals / reference PDFs — kept locally, not tracked in git
+REFERENCES/
+
+# OS junk
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Node / build artifacts (feedback_site, visualization)
+node_modules/
+dist/
+build/
+.next/
+.cache/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.env.local
+.env.*.local

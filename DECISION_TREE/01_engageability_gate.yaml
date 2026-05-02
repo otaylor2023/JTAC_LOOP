@@ -1,0 +1,224 @@
+# Tree 1 — Engageability Gate
+#
+# First gate. Can we even consider engaging this target?
+# Output is one of: ENGAGEABLE | ENGAGEABLE_WITH_CAVEATS | NOT_ENGAGEABLE | SELF_DEFENSE_OVERRIDE
+# Plus: list of flags / reasons.
+#
+# Doctrinal foundations:
+#   PID definition — CJCSI 3160.01 p.D-A-7: "reasonable certainty that a functionally and geospatially defined
+#     object of attack is a legitimate military target in accordance with the LOW and applicable ROE."
+#   Multi-source PID — JFO ATTP ¶1-136: "Video feeds should not be used as a single-source target identification method."
+#   No-strike list — CJCSI 3160.01 Encl B (Cat I and Cat II protected categories)
+#   ROE — CJCSI 3160.01 p.D-A-8: "confirm that current ROE authorizes the target for engagement"
+#   Self-defense — CJCSI 3160.01 p.D-3 (parallel branch, never overridden)
+#   Airspace — Kill Box 2014 + JP 3-52 (active airspace measures gate)
+#   TLE — JFO ATTP ¶1-129 to 1-134 (Target Location Error categories)
+
+tree: engageability_gate
+version: 1.0
+output_states:
+  - ENGAGEABLE
+  - ENGAGEABLE_WITH_CAVEATS
+  - NOT_ENGAGEABLE
+  - SELF_DEFENSE_OVERRIDE
+
+nodes:
+
+  # ─── BRANCH 0: SELF-DEFENSE PARALLEL CHECK ─────────────────────────────
+  - id: self_defense_check
+    type: predicate
+    plain_language: "Are friendly forces taking effective fire from this target right now?"
+    condition: friendlies_taking_effective_fire == true
+    on_true:
+      result: SELF_DEFENSE_OVERRIDE
+      flag: "SELF DEFENSE — proportional response per LOW + Standing ROE"
+      bypass: ["nsl_check", "roe_target_category_check"]
+      preserve: ["pid_check", "airspace_check", "danger_close_check"]
+    on_false: { goto: pid_multisource_check }
+    citation: "CJCSI 3160.01 p.D-3; Standing ROE"
+
+  # ─── BRANCH 1: PID GATE ─────────────────────────────────────────────────
+  - id: pid_multisource_check
+    type: predicate
+    plain_language: "Do we have at least two independent sources confirming this is a legitimate target?"
+    rationale: |
+      Drone EO/IR alone does not satisfy PID per JFO ATTP ¶1-136. We require the CNN
+      classification + at least one of:
+        • Ground-team visual or radio confirmation
+        • SIGINT correlation (radio intercept, RF emission)
+        • Multi-pass observation (sustained tracking >MIN_OBS seconds with consistent classification)
+        • Operator override with logged justification
+    condition: count(corroborating_sources) >= 2
+    on_true: { goto: pid_confidence_check }
+    on_false:
+      result: NOT_ENGAGEABLE
+      flag: "INSUFFICIENT PID — single-source FMV does not meet doctrinal PID standard"
+      remedy: "Hold target as 'observed,' run additional collection, or escalate to JTAC for override"
+    citation: "JFO ATTP ¶1-136; CJCSI 3160.01 p.D-A-7"
+
+  - id: pid_confidence_check
+    type: predicate
+    plain_language: "Is the CNN classification confidence above threshold?"
+    rationale: |
+      Doctrine does not specify a numeric confidence threshold (uses 'reasonable certainty').
+      We use 0.85 as a starting threshold — TUNABLE WITH COLLEN.
+    condition: cnn_confidence >= 0.85
+    on_true: { goto: observation_duration_check }
+    on_false:
+      result: ENGAGEABLE_WITH_CAVEATS
+      flag: "LOW CLASSIFICATION CONFIDENCE — JTAC review especially recommended"
+      goto: observation_duration_check
+    open_question_for_collen: "What is your working confidence threshold for engaging based on a sensor classification?"
+
+  - id: observation_duration_check
+    type: predicate
+    plain_language: "Have we observed this target consistently for long enough?"
+    rationale: |
+      A target appearing for 2 frames and disappearing is not a real PID. Sustained observation
+      reduces false positives. Default threshold: 30 seconds — TUNABLE.
+    condition: observation_duration_s >= 30
+    on_true: { goto: nsl_check }
+    on_false:
+      result: ENGAGEABLE_WITH_CAVEATS
+      flag: "INSUFFICIENT OBSERVATION DURATION"
+      goto: nsl_check
+
+  # ─── BRANCH 2: NO-STRIKE LIST ──────────────────────────────────────────
+  - id: nsl_check
+    type: predicate
+    plain_language: "Is the target itself, or a structure within its location, on the no-strike list?"
+    rationale: |
+      Cat I (CJCSI 3160.01 Encl B p.B-1 to B-3): hospitals, schools, religious sites, diplomatic
+      missions, refugee camps, POW camps, dams/dikes whose engagement floods civilians.
+    condition: any(target_or_collateral in nsl_cat_i)
+    on_true:
+      result: NOT_ENGAGEABLE
+      flag: "NO-STRIKE LIST MATCH (Category I)"
+      escalation: "Status change requires Combatant Commander or designated representative authority"
+      override_path: "Self-defense if friendlies are taking fire FROM the protected entity (CJCSI 3160.01 p.C-B-4)"
+    on_false: { goto: nsl_cat_ii_check }
+    citation: "CJCSI 3160.01 Encl B p.B-1 to B-3, p.C-B-4"
+
+  - id: nsl_cat_ii_check
+    type: predicate
+    plain_language: "Is the target a Category II protected entity (private housing, public utility, market, etc.)?"
+    condition: any(target_or_collateral in nsl_cat_ii)
+    on_true:
+      result: ENGAGEABLE_WITH_CAVEATS
+      flag: "CATEGORY II PROTECTED — CDE elevated review required"
+      goto: airspace_check
+    on_false: { goto: airspace_check }
+    citation: "CJCSI 3160.01 Encl B p.B-3 to B-6"
+
+  # ─── BRANCH 3: AIRSPACE GATE ───────────────────────────────────────────
+  - id: airspace_check
+    type: composite
+    plain_language: "Is the target inside an airspace box that allows our weapons release?"
+    sub_checks:
+      - id: kill_box_status
+        plain_language: "If target is inside an active kill box, what's its fire/airspace status?"
+        rationale: |
+          Kill boxes have orthogonal status: fires HOT/COLD × airspace OPEN/CLOSED.
+          Importantly, kill boxes are NEVER used for CAS — if we're doing CAS in an active kill box,
+          the controlling agency must turn the relevant segment COLD first.
+        rules:
+          - if: target_in_active_kill_box AND fires_status == "HOT" AND airspace_status == "OPEN"
+            then: { allow_engagement: true, mode: "SCAR (non-CAS)", flag: "KILL BOX HOT — non-CAS strike permissible" }
+          - if: target_in_active_kill_box AND fires_status == "COLD"
+            then: { allow_engagement: true, mode: "CAS", flag: "Kill box cold — CAS procedures apply" }
+          - if: target_in_active_kill_box AND airspace_status == "CLOSED" AND drone_not_authorized
+            then: { result: NOT_ENGAGEABLE, flag: "Drone not authorized in closed airspace segment" }
+        citation: "Kill Box 2014 p.1, p.6 ¶6c"
+      - id: nfa_rfa_check
+        plain_language: "Is the target inside a No-Fire Area or Restricted Fire Area?"
+        rules:
+          - if: target_in_nfa
+            then: { result: NOT_ENGAGEABLE, flag: "TARGET IN NFA (No-Fire Area)" }
+          - if: target_in_rfa
+            then: { result: ENGAGEABLE_WITH_CAVEATS, flag: "TARGET IN RFA — coordination with establishing HQ required" }
+        citation: "JP 3-52; Kill Box 2014 p.6"
+      - id: aircraft_threat_ring
+        plain_language: "Will the responding aircraft have to fly through an active enemy missile zone?"
+        rules:
+          - if: aircraft_route_intersects_active_mez AND no_sead_planned
+            then: { result: ENGAGEABLE_WITH_CAVEATS, flag: "AIRCRAFT ROUTE INTERSECTS ACTIVE MEZ — SEAD required" }
+        citation: "JSEAD 2015 p.16 Table 3"
+    on_pass: { goto: roe_target_category_check }
+
+  # ─── BRANCH 4: ROE GATE ────────────────────────────────────────────────
+  - id: roe_target_category_check
+    type: predicate
+    plain_language: "Does the current Rules of Engagement authorize engaging this target type?"
+    rationale: |
+      ROE is theater-specific. The system reads from a structured ROE feed (e.g., 'tanks YES,
+      civilian vehicles NO except with hostile-act trigger'). This node enforces the category check.
+    condition: target_class in roe.approved_categories
+    on_true: { goto: tle_quality_check }
+    on_false:
+      result: NOT_ENGAGEABLE
+      flag: "TARGET CATEGORY NOT AUTHORIZED BY CURRENT ROE"
+      remedy: "Hold target; brief GFC for ROE waiver if mission-critical"
+    citation: "CJCSI 3160.01 p.D-A-8; JP 3-06 p.IV-43"
+
+  # ─── BRANCH 5: COORDINATE QUALITY (TLE) ────────────────────────────────
+  - id: tle_quality_check
+    type: predicate
+    plain_language: "Is our position fix on the target good enough to even consider striking?"
+    rationale: |
+      The drone+sensor stack typically produces CAT III (~30 m) coordinates without mensuration.
+      Anything worse than CAT III is not engageable for precision weapons. Drives munition tree.
+    condition: tle_category in [CAT_I, CAT_II, CAT_III]
+    on_true:
+      pass_through: { tle_category: tle_category }
+      goto: hostile_intent_check
+    on_false:
+      result: NOT_ENGAGEABLE
+      flag: "POSITION UNCERTAINTY EXCEEDS CAT III — refine before engagement"
+      remedy: "Mensurate via PSS-SOF, request multi-pass averaging, or wait for CAT-III-capable observation"
+    citation: "JFO ATTP ¶1-129 to 1-134; ATP 3-09.30 ¶3-71"
+
+  # ─── BRANCH 6: HOSTILE INTENT (for non-self-defense engagements) ────────
+  - id: hostile_intent_check
+    type: predicate
+    plain_language: "Has the target demonstrated a hostile act or hostile intent (or is on an approved target list)?"
+    condition: hostile_act == true OR hostile_intent == true OR target_on_approved_list == true
+    on_true: { goto: cde_level_one_check }
+    on_false:
+      result: NOT_ENGAGEABLE
+      flag: "NO HOSTILE ACT/INTENT AND NOT ON APPROVED LIST"
+    citation: "CJCSI 3160.01 p.D-3; Standing ROE"
+
+  # ─── BRANCH 7: CDE LEVEL 1 (TARGET VALIDATION) ─────────────────────────
+  - id: cde_level_one_check
+    type: composite
+    plain_language: "Is the target functionally distinguishable, dual-use-checked, and free of CBR / environmental hazards?"
+    rationale: |
+      First level of the Collateral Damage Estimation cascade. Five sub-checks. Failures route
+      to higher CDE levels (Level 5 = SecDef/POTUS approval unless delegated).
+    sub_checks:
+      - id: dual_use
+        plain_language: "Does the target serve a dual military/civilian function?"
+        condition: target.dual_use == true
+        on_true: { flag: "DUAL-USE TARGET — auto-escalate to CDE Level 5" }
+      - id: cbr_hazard
+        plain_language: "Could striking it release chemical, biological, or radioactive material?"
+        condition: target.cbr_hazard == true
+        on_true:
+          flag: "CBR PLUME HAZARD — DTRA HPAC analysis required, escalate to CDE Level 5"
+          escalate_to: "STAR process"
+      - id: environmental_hazard
+        plain_language: "Could the strike cause uncontrollable fire, flooding, or hazmat spread?"
+        condition: target.environmental_hazard == true
+        on_true: { flag: "ENVIRONMENTAL HAZARD — escalate to CDE Level 5" }
+      - id: protected_in_cer_radius
+        plain_language: "Is any protected facility within the largest possible weapon's effects radius?"
+        rationale: "CDE Level 1 CER covers every conventional weapon in inventory."
+        condition: protected_facility_distance_m < cde_level_1_cer_m
+        on_true: { flag: "PROTECTED FACILITY IN CDE LEVEL 1 CHA — proceed to weaponeering with restrictions" }
+    on_pass: { goto: final }
+    citation: "CJCSI 3160.01 Encl A pp.D-A-7 to D-A-12"
+
+  - id: final
+    type: terminal
+    output: ENGAGEABLE | ENGAGEABLE_WITH_CAVEATS  # final state set by accumulated flags
+    pass_to_next_tree: munition_selection

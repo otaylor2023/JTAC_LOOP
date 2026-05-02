@@ -1,0 +1,181 @@
+# Tree 2 — Munition Selection
+#
+# Three stages: hard filter, flag stage, rank.
+# Inputs: engageability outputs (incl. tle_category), target classification, friendly positions,
+#         protected sites, aircraft loadout, weather, ROE munition restrictions.
+# Output: ranked list of viable (munition, fuze, delivery_profile) with attached flags + reasoning trace.
+
+tree: munition_selection
+version: 1.0
+inputs:
+  - target_class
+  - target_movement_state    # stationary | slow | fast
+  - target_hardness          # soft | light_armor | armor | heavy_armor | hardened | bunker
+  - tle_category             # CAT_I | CAT_II | CAT_III
+  - friendly_distance_m
+  - protected_site_distance_m_min
+  - aircraft_loadout         # list of {munition_id, count, fuze_options}
+  - weather                  # cloud_ceiling_ft, visibility_m, wind_kts, precipitation
+  - roe_munition_restrictions
+
+stages:
+
+  # ────────────────────────────────────────────────────────────────────────
+  # STAGE 2A — HARD FILTER (deterministic gates)
+  # For each munition in aircraft.loadout, run the filters.
+  # ────────────────────────────────────────────────────────────────────────
+  hard_filter:
+
+    - id: tle_compatibility
+      plain_language: "Is our position fix accurate enough for this weapon's guidance?"
+      rule: |
+        For each munition m:
+          if m.tle_required_m < tle_category.value_m: ELIMINATE m
+        TLE values: CAT_I = 10 m, CAT_II = 20 m, CAT_III = 30 m.
+        GPS-only weapons (JDAM family) require CAT_I → eliminated when drone alone is the source.
+        Laser-guided and IIR weapons tolerate CAT_III (the laser spot or IIR seeker is the aimpoint).
+      citation: "JFO ATTP ¶1-134; ATP 3-09.30 ¶3-71"
+
+    - id: target_class_viability
+      plain_language: "Is this weapon doctrinally usable against this target class?"
+      rule: |
+        For each munition m:
+          if target_class not in m.target_classes_doctrinally_effective_against
+          AND target_class not in target_effectiveness_matrix[m.class][rating: ACCEPTABLE or PREFERRED]:
+            ELIMINATE m
+      citation: "AFTTP 3-3.JTAC §6.4; target_effectiveness_matrix.yaml"
+
+    - id: weather_supports_guidance
+      plain_language: "Will the weather defeat this weapon's guidance system?"
+      rules:
+        - if: m.guidance == "laser" AND weather.cloud_ceiling_ft < 5000
+          then: ELIMINATE  # laser homing requires line-of-sight to target through release alt
+          citation: "AFTTP 6.4.3.1 p.6-5"
+        - if: m.guidance == "laser" AND weather.heavy_smoke_or_dust == true
+          then: ELIMINATE
+        - if: m.guidance == "iir" AND weather.visibility_m < 3000
+          then: ELIMINATE  # IIR seeker needs thermal contrast through atmosphere
+        - if: m.guidance in [gps, gps_laser] AND weather.gps_jamming == true
+          then: ELIMINATE
+        - if: m.guidance == "ballistic" AND weather.wind_kts > 30
+          then: FLAG "high wind drift — accept degraded accuracy"
+
+    - id: aircraft_can_deliver
+      plain_language: "Does the responding aircraft have this weapon and the loadout to deliver it?"
+      rule: |
+        For each munition m:
+          if responding_aircraft.platform not in m.delivery_aircraft: ELIMINATE
+          if responding_aircraft.loadout[m.id].count == 0: ELIMINATE
+
+    - id: protected_site_in_red
+      plain_language: "Is a no-strike protected site inside this weapon's danger circle?"
+      rule: |
+        For each munition m:
+          for each protected_site p in CDE_radius:
+            if p.category == "Cat I" (hospital, school, mosque, etc.)
+            AND distance(target, p) <= m.red_standing_m:
+              ELIMINATE m  # Cat I protected sites cannot be inside RED
+            elif p.category == "Cat II" AND distance(target, p) <= m.red_standing_m:
+              FLAG m as "CDE_ELEVATED — Cat II protected within RED"
+      citation: "CJCSI 3160.01 Encl B; CDE Level 1 cascade"
+
+    - id: roe_munition_block
+      plain_language: "Does the current ROE prohibit this weapon class?"
+      rule: |
+        For each munition m:
+          if m.id in roe.prohibited_munitions: ELIMINATE
+          if m.class == "cluster" AND roe.cluster_prohibited: ELIMINATE
+      citation: "CJCSI 3160.01 p.D-A-22 (cluster prohibited at Level 3+)"
+
+  # ────────────────────────────────────────────────────────────────────────
+  # STAGE 2B — FLAG STAGE (annotate surviving munitions)
+  # ────────────────────────────────────────────────────────────────────────
+  flag_stage:
+
+    - id: danger_close_flag
+      plain_language: "Are friendlies inside this weapon's danger-close distance?"
+      rule: |
+        For each munition m:
+          if friendly_distance_m <= m.red_standing_m:
+            FLAG m as "DANGER_CLOSE"
+            REQUIRE: ground_force_commander_initials
+            ENFORCE: control_type = Type_1
+            PREFER: weapon_axis_parallel_to_friendly_axis
+      citation: "JP 3-09.3 III-36; JFIRE Appendix H"
+
+    - id: extreme_dc_flag
+      plain_language: "Are friendlies inside half the danger-close distance?"
+      rule: |
+        For each munition m:
+          if friendly_distance_m < (0.5 * m.red_standing_m):
+            FLAG m as "EXTREME_DANGER_CLOSE"
+            RECOMMEND: smaller_frag_alternative_if_available
+
+    - id: cde_elevated_flag
+      plain_language: "Is this a protected site within the danger circle, or a dual-use target?"
+      rule: |
+        if dual_use_target == true: FLAG "CDE_LEVEL_5 — escalation required (SecDef/POTUS unless delegated)"
+        if cat_ii_protected_in_red: FLAG "CDE_LEVEL_3+ — refined assessment required"
+      citation: "CJCSI 3160.01 p.D-A-30, p.D-A-35"
+
+    - id: control_type_constraint_flag
+      plain_language: "Does this weapon's guidance dictate a specific control type?"
+      rule: |
+        For each munition m:
+          if m.guidance in [gps, gps_laser]:
+            FLAG m as "TYPE_1_PROHIBITED"  # JP 3-09.3 III-43 note
+      citation: "JP 3-09.3 III-43 note"
+
+    - id: minimum_release_altitude_flag
+      plain_language: "Does this weapon need a minimum release altitude that conflicts with the threat environment?"
+      rule: |
+        For each munition m:
+          if m.min_release_alt_ft > weather.usable_ceiling_ft:
+            FLAG "RELEASE_ALT_RESTRICTED"
+
+  # ────────────────────────────────────────────────────────────────────────
+  # STAGE 2C — RANK
+  # ────────────────────────────────────────────────────────────────────────
+  rank:
+    primary_score:
+      source: target_effectiveness_matrix
+      mapping:
+        PREFERRED: 1.0
+        ACCEPTABLE: 0.7
+        MARGINAL: 0.4
+        NOT_REC: 0.0
+        PROHIBITED: -1.0  # eliminated already, defensive
+    tiebreakers_in_order:
+      - 1_friendly_safety_margin:
+          score: "(friendly_distance_m - red_standing_m) / red_standing_m"
+          direction: maximize
+      - 2_collateral_minimization:
+          score: "-red_standing_m"
+          direction: maximize
+          weight_when: "any cat_ii_protected_in_red"
+      - 3_loadout_depth:
+          score: "aircraft.loadout[m.id].count"
+          direction: maximize
+      - 4_aircrew_familiarity:
+          score: "+1 if m.id in aircraft.fragged_primary else 0"
+      - 5_time_to_target:
+          score: "-weapon_flight_time_s"
+          weight_when: "target.is_time_sensitive"
+    output_top_n: 3
+
+  # ────────────────────────────────────────────────────────────────────────
+  # STAGE 2D — REASONING TRACE
+  # ────────────────────────────────────────────────────────────────────────
+  trace:
+    record_per_recommendation:
+      - hard_filters_passed: list
+      - flags: list
+      - effectiveness_score: float
+      - tiebreakers_applied: list
+      - reasoning_paragraph: |
+          "Recommended {munition} for {target}. {munition} ranked first because:
+            • {effectiveness_score} on effectiveness matrix vs {target_class}
+            • Friendly distance {friendly_distance_m}m {comparison} danger-close threshold {red_standing_m}m
+            • {n_alternatives_considered} alternatives considered
+            • {flags_list}
+          Flags requiring JTAC attention: {flags}."

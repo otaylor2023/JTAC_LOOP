@@ -1,0 +1,421 @@
+# Test Scenarios — for Collen review and regression testing
+#
+# Each scenario carries:
+#   - inputs: full state the system would receive
+#   - expected_output: what the tree should produce (qualitative)
+#   - what_we_want_collen_to_grade: specific judgments needed
+#
+# Coverage philosophy: from simple (single soft target, no civilians) → complex (urban,
+# multi-target, danger close at night). 10 scenarios spanning that gradient.
+
+scenarios:
+
+  # ────────────────────────────────────────────────────────────────────────
+  # SCENARIO 1 — Baseline easy case
+  # ────────────────────────────────────────────────────────────────────────
+  - id: S01_baseline_technical_open_terrain
+    title: "Single technical, open terrain, no complications"
+    inputs:
+      target:
+        type: vehicle_wheeled_soft
+        description: "Single technical with mounted DShK"
+        movement: stationary
+        location: { lat: 38.123, lon: 38.456, elevation_ft_msl: 312 }
+        cnn_confidence: 0.93
+        observation_duration_s: 120
+        tle_category: CAT_III
+      friendlies:
+        - { position: [38.130, 38.450], distance_m: 800, exposure: dug_in, axis_orientation_deg: 045 }
+      civilians: []
+      protected_sites: []
+      aircraft:
+        platform: A-10
+        loadout:
+          GBU-12: { count: 4 }
+          AGM-65D: { count: 2 }
+          GAU-8: { rounds: 1100 }
+        playtime_min: 45
+      weather: { cloud_ceiling_ft: 12000, visibility_m: 10000, wind_kts: 8, precipitation: none }
+      time_of_day: day
+      threats: []
+      roe: { approved_categories: [combatant_vehicle], cluster_prohibited: true }
+      airspace: { kill_box_status: not_applicable, target_in_nfa: false, target_in_rfa: false }
+      jtac_visual_on_target: false
+      jtac_visual_on_aircraft: false
+      drone_target_visual: true
+
+    expected_output:
+      engageability: ENGAGEABLE
+      primary_munition: GBU-12
+      control_type: Type_2
+      method_of_attack: BOT
+      mark_method: laser_designation
+      danger_close: false
+      cde_flags: []
+      reasoning_summary: "Open soft target, friendlies safe distance, weather clear, GBU-12 highest effectiveness."
+
+    what_we_want_collen_to_grade:
+      - "Is GBU-12 your first choice here? Or would you go AGM-65D given the laser-vs-IIR weather situation?"
+      - "Is Type 2 right when JTAC has no visual on either target or aircraft, but drone has target?"
+      - "TOT preference: push when ready / scheduled / immediate?"
+
+  # ────────────────────────────────────────────────────────────────────────
+  # SCENARIO 2 — Moving target
+  # ────────────────────────────────────────────────────────────────────────
+  - id: S02_moving_technical
+    title: "Same scenario but the technical is moving slowly"
+    inputs_diff_from: S01_baseline_technical_open_terrain
+    overrides:
+      target.movement: slow
+      target.speed_kts: 25
+      target.heading_deg: 270
+    expected_output:
+      primary_munition: AGM-65D
+      reasoning_summary: "AGM-65D preferred over GBU-12 for movers (AFTTP 6.3.4); IIR seeker autonomous"
+    what_we_want_collen_to_grade:
+      - "Does the system flip to Maverick correctly?"
+      - "Or do you actually prefer GBU-54 LJDAM for slow movers if the aircraft has it?"
+
+  # ────────────────────────────────────────────────────────────────────────
+  # SCENARIO 3 — Danger close
+  # ────────────────────────────────────────────────────────────────────────
+  - id: S03_danger_close_dug_in_personnel
+    title: "Dismounts assaulting friendly position, friendlies inside GBU-12 RED"
+    inputs:
+      target:
+        type: personnel_concentrated
+        description: "8x dismounted infantry advancing"
+        movement: slow
+        location: { lat: 38.200, lon: 38.500, elevation_ft_msl: 250 }
+        cnn_confidence: 0.88
+        observation_duration_s: 60
+        tle_category: CAT_III
+      friendlies:
+        - { position: [38.197, 38.498], distance_m: 240, exposure: dug_in, axis_orientation_deg: 030 }
+      civilians: []
+      protected_sites: []
+      aircraft:
+        platform: AH-64
+        loadout: { AGM-114K: { count: 4 }, AGM-114R: { count: 4 }, 30mm: { rounds: 800 } }
+      weather: { cloud_ceiling_ft: 9000, visibility_m: 8000, wind_kts: 12 }
+      time_of_day: day
+      threats: []
+      drone_target_visual: true
+      jtac_visual_on_target: true
+      jtac_visual_on_aircraft: true
+      friendlies_taking_effective_fire: true
+
+    expected_output:
+      engageability: SELF_DEFENSE_OVERRIDE
+      primary_munition: AGM-114K
+      control_type: Type_1   # JTAC has both visuals; danger close forces tightest
+      danger_close: true
+      gfc_initials_required: true
+      cde_flags: []
+      restrictions: ["DANGER CLOSE — initials <X> required", "FAH parallel to friendly axis 030 ± 30°"]
+      reasoning_summary: "Friendlies at 240m, AGM-114K RED 110m → SAFE; chosen over GBU-12 (RED 275m) which would be danger close."
+
+    what_we_want_collen_to_grade:
+      - "Hellfire over the GBU-12 — is this your call?"
+      - "Type 1 forced because of danger close — agree?"
+      - "Is the FAH-parallel-to-friendly-axis rule applied correctly here?"
+      - "When friendlies are taking fire, do you execute self-defense engagement under standing ROE
+         WITHOUT waiting for GFC initials, or do initials still apply?"
+
+  # ────────────────────────────────────────────────────────────────────────
+  # SCENARIO 4 — Urban, school nearby
+  # ────────────────────────────────────────────────────────────────────────
+  - id: S04_urban_school_near
+    title: "Mortar team in urban building, school 400m east, school day"
+    inputs:
+      target:
+        type: personnel_concentrated
+        sub_type: mortar_team
+        description: "3-4 fighters with 82mm mortar on rooftop, 2-story residential building"
+        movement: stationary
+        location: { lat: 38.300, lon: 38.600, elevation_ft_msl: 180 }
+        cnn_confidence: 0.79  # below 0.85 threshold — caveat
+        observation_duration_s: 240
+        tle_category: CAT_II  # mensurated
+        in_structure: true
+      friendlies:
+        - { position: [38.295, 38.595], distance_m: 700, exposure: vehicle_mounted, axis_orientation_deg: 080 }
+      civilians:
+        - { position: [38.300, 38.605], distance_m: 400, type: school, occupancy_estimated: high, time_window: school_hours }
+      protected_sites:
+        - { position: [38.300, 38.605], category: Cat_I, type: school }
+      aircraft:
+        platform: F-16
+        loadout: { GBU-12: { count: 2 }, GBU-38: { count: 4 }, GBU-39: { count: 8 }, M61_20mm: { rounds: 510 } }
+      weather: { cloud_ceiling_ft: 15000, visibility_m: 12000, wind_kts: 15 }
+      time_of_day: day
+      threats: []
+      drone_target_visual: true
+      urban_environment: true
+      jtac_visual_on_target: false
+      drone_has_laser_designator: true
+
+    expected_output:
+      engageability: ENGAGEABLE_WITH_CAVEATS
+      caveats: ["LOW CLASSIFICATION CONFIDENCE", "Cat I protected site (school) within 500m"]
+      primary_munition: GBU-39  # smallest frag, sufficient against soft target in structure
+      munition_alternatives: [GBU-39_FLM_if_available, AGM-114N_if_helo_on_station]
+      control_type: Type_1     # civilians within 500m forces Type 1 per planning doc heuristic
+      method_of_attack: BOC    # JDAM-class; GBU-39 GPS-only
+      cde_flags: ["Cat I protected within 500m — CDE Level 5 review required for any munition larger than SDB"]
+      restrictions:
+        - "FAH parallel to and away from school (East) — restrict to W or SW attack heading"
+        - "Use delay fuze for in-structure target (ATP 3-06.1)"
+
+    what_we_want_collen_to_grade:
+      - "Is GBU-39 the right choice, or do you actually prefer to wait and bring in a Hellfire-capable platform for tighter CDE?"
+      - "Is your unit's working rule 'school within 500m → don't engage at all without higher approval'?"
+      - "How would you handle the 0.79 classification confidence — pull a JFO or ground-team confirmation?"
+      - "Type 1 forced because of civilians in 500m — what's your actual rule on this?"
+
+  # ────────────────────────────────────────────────────────────────────────
+  # SCENARIO 5 — Night, no NVG-equipped friendlies
+  # ────────────────────────────────────────────────────────────────────────
+  - id: S05_night_armor
+    title: "T-72 in revetment, night, no civilians, friendlies at 1500m"
+    inputs:
+      target:
+        type: vehicle_tracked_armor
+        description: "Single T-72 in earthen revetment"
+        movement: stationary
+        location: { lat: 38.400, lon: 38.700, elevation_ft_msl: 450 }
+        cnn_confidence: 0.91
+        observation_duration_s: 600
+        tle_category: CAT_II
+      friendlies:
+        - { position: [38.412, 38.692], distance_m: 1500, exposure: dug_in, ir_strobe: true }
+      civilians: []
+      protected_sites: []
+      aircraft:
+        platform: F-15E
+        loadout: { GBU-12: { count: 4 }, GBU-31: { count: 2 }, AGM-65L: { count: 2 } }
+        nvg_capable: true
+      weather: { cloud_ceiling_ft: 8000, visibility_m: 6000, wind_kts: 10, time_of_day: night }
+      time_of_day: night
+      threats: []
+      drone_target_visual: true
+      drone_has_laser_designator: true
+      jtac_has_ir_pointer: true
+
+    expected_output:
+      engageability: ENGAGEABLE
+      primary_munition: GBU-31  # 2000 lb for T-72; CAT II coords sufficient with revetment as wide aimpoint
+      munition_alternative_1: GBU-12  # 500 lb may be insufficient for MBT
+      munition_alternative_2: AGM-65L
+      control_type: Type_2
+      mark_method: laser_designation_with_ir_pointer_backup
+      friendly_mark: ir_strobe
+      reasoning_summary: "T-72 needs 2000-lb class to reliably defeat armor; CAT II + JDAM viable."
+
+    what_we_want_collen_to_grade:
+      - "GBU-31 vs GBU-12 vs AGM-65L for a stationary T-72 — your call?"
+      - "Is laser primary + IR backup the right night marking combo?"
+      - "Do you require buddy-lase from a different aircraft for the GBU-12 case, or does drone-lase suffice?"
+
+  # ────────────────────────────────────────────────────────────────────────
+  # SCENARIO 6 — Multi-target engagement window
+  # ────────────────────────────────────────────────────────────────────────
+  - id: S06_multi_target_BRDMs
+    title: "3x BRDMs spread over 800m, dispersed pattern, no friendlies near"
+    inputs:
+      target:
+        type: vehicle_tracked_light
+        description: "3x BRDM dispersed in column"
+        count: 3
+        movement: slow
+        location_centroid: { lat: 38.500, lon: 38.800, elevation_ft_msl: 290 }
+        cnn_confidence: 0.94
+        tle_category: CAT_III
+      friendlies:
+        - { position: [38.510, 38.795], distance_m: 1200, exposure: vehicle_mounted }
+      civilians: []
+      protected_sites: []
+      aircraft:
+        platform: F-15E
+        loadout: { GBU-12: { count: 6 }, AGM-65D: { count: 2 } }
+        playtime_min: 60
+      weather: clear
+      time_of_day: day
+      threats: []
+      drone_target_visual: true
+      multi_target_engagement_window: true
+      supported_commander_authorized_type_3: true
+
+    expected_output:
+      engageability: ENGAGEABLE
+      primary_munition: GBU-12  # one per BRDM
+      control_type: Type_3
+      restrictions:
+        - "Engagement window: 0930Z-0945Z"
+        - "Geographic boundary: <kill_box_keypad>"
+        - "Specific target set: BRDMs only — do not engage other vehicles"
+        - "FAH 270-330 clockwise"
+      aircrew_calls_required: [COMMENCING_ENGAGEMENT, ENGAGEMENT_COMPLETE]
+
+    what_we_want_collen_to_grade:
+      - "Is Type 3 right here, or would you stay Type 2 and clear each release?"
+      - "Are the restrictions sufficient or are we missing one?"
+
+  # ────────────────────────────────────────────────────────────────────────
+  # SCENARIO 7 — Degraded conditions (bad weather)
+  # ────────────────────────────────────────────────────────────────────────
+  - id: S07_low_ceiling_no_laser
+    title: "Soft target, friendlies safe, but cloud deck at 4000 ft kills laser guidance"
+    inputs:
+      target:
+        type: vehicle_wheeled_soft
+        description: "ZSU-23-4 anti-aircraft gun"
+        movement: stationary
+        location: { lat: 38.600, lon: 38.900, elevation_ft_msl: 320 }
+        cnn_confidence: 0.92
+        tle_category: CAT_I  # mensurated to JDAM-grade
+      friendlies:
+        - { position: [38.610, 38.890], distance_m: 1100 }
+      civilians: []
+      protected_sites: []
+      aircraft:
+        platform: F-15E
+        loadout: { GBU-12: { count: 4 }, GBU-38: { count: 4 }, GBU-39: { count: 8 } }
+      weather: { cloud_ceiling_ft: 4000, visibility_m: 4000, wind_kts: 18 }
+      time_of_day: day
+      threats:
+        - { type: ZSU-23-4, position: target.location, range_m: 2500 }   # the target IS the threat
+      drone_target_visual: true
+
+    expected_output:
+      engageability: ENGAGEABLE
+      primary_munition: GBU-38  # JDAM works in cloud; CAT I coords available
+      munition_eliminations: [GBU-12]   # cloud ceiling defeats laser
+      control_type: Type_2  # GPS munition prohibits Type 1
+      method_of_attack: BOC
+      restrictions:
+        - "MANPADS / AAA threat at target location — recommend altitude floor per SPINS"
+        - "Aircraft above cloud deck — visual on aircraft will not be possible"
+
+    what_we_want_collen_to_grade:
+      - "Is the laser-elimination logic right for a 4000 ft cloud deck?"
+      - "When the target IS the threat (AAA system), what's your TTP?"
+
+  # ────────────────────────────────────────────────────────────────────────
+  # SCENARIO 8 — Hospital adjacent
+  # ────────────────────────────────────────────────────────────────────────
+  - id: S08_hospital_adjacent_no_strike
+    title: "Combatants firing from a building 80m from a working hospital"
+    inputs:
+      target:
+        type: personnel_concentrated
+        description: "2-3 fighters in commercial building, RPG launches observed"
+        movement: stationary
+        location: { lat: 38.700, lon: 39.000, elevation_ft_msl: 200 }
+        cnn_confidence: 0.85
+        observation_duration_s: 180
+        tle_category: CAT_II
+        in_structure: true
+      friendlies:
+        - { position: [38.703, 38.998], distance_m: 350, exposure: vehicle_mounted, taking_fire: true }
+      civilians:
+        - { position: [38.700, 39.001], distance_m: 80, type: hospital, occupancy_estimated: high }
+      protected_sites:
+        - { position: [38.700, 39.001], category: Cat_I, type: hospital }
+      aircraft:
+        platform: AH-64
+        loadout: { AGM-114N: { count: 2 }, AGM-114R: { count: 4 }, 30mm: { rounds: 800 } }
+      weather: clear
+      time_of_day: day
+      threats: []
+      friendlies_taking_effective_fire: true
+      drone_target_visual: true
+
+    expected_output:
+      engageability: SELF_DEFENSE_OVERRIDE
+      caveats: ["Hospital at 80m — Cat I protected site within RED of all listed munitions"]
+      primary_munition: AGM-114N  # thermobaric; smallest RED for in-structure targets
+      munition_alternative: gun_30mm  # direct-fire, exempt from CDE
+      munition_eliminations: ["all bombs ≥500 lb — RED exceeds hospital distance"]
+      control_type: Type_1
+      restrictions:
+        - "Cat I (hospital) at 80m — auto-escalates to elevated review"
+        - "FAH parallel to and away from hospital (East) — restrict to W attack heading"
+        - "Self-defense ROE in effect — proportional response"
+
+    what_we_want_collen_to_grade:
+      - "How do you balance self-defense (friendlies taking fire) against a hospital at 80m?"
+      - "AGM-114N thermobaric vs 30mm strafe — which would you actually choose here?"
+      - "Does self-defense override the Cat I protected-site block, or does it just adjust the procedure?"
+
+  # ────────────────────────────────────────────────────────────────────────
+  # SCENARIO 9 — Low confidence classification
+  # ────────────────────────────────────────────────────────────────────────
+  - id: S09_low_confidence_pickup_truck
+    title: "Pickup truck, may or may not be a technical — CNN flips between 0.62-0.71"
+    inputs:
+      target:
+        type: vehicle_wheeled_soft
+        description: "Pickup truck — possible mounted weapon, ambiguous"
+        movement: stationary
+        location: { lat: 38.800, lon: 39.100, elevation_ft_msl: 410 }
+        cnn_confidence: 0.65
+        observation_duration_s: 90
+        tle_category: CAT_III
+      friendlies:
+        - { position: [38.810, 39.095], distance_m: 1500 }
+      civilians: []
+      protected_sites: []
+      aircraft:
+        platform: A-10
+        loadout: { GBU-12: { count: 4 }, AGM-65D: { count: 2 }, GAU-8: { rounds: 1100 } }
+      weather: clear
+      time_of_day: day
+      threats: []
+      drone_target_visual: true
+
+    expected_output:
+      engageability: NOT_ENGAGEABLE  # below 0.85 threshold AND single-source FMV
+      caveats: ["INSUFFICIENT PID — single-source FMV", "LOW CLASSIFICATION CONFIDENCE"]
+      remedy: "Hold target. Request multi-source corroboration (SIGINT, ground team), or operator override with logged justification."
+
+    what_we_want_collen_to_grade:
+      - "Is the right call really 'hold and observe' or do you sometimes engage at lower confidence?"
+      - "What second source would actually be available to you in the field?"
+
+  # ────────────────────────────────────────────────────────────────────────
+  # SCENARIO 10 — Aircraft loadout mismatch
+  # ────────────────────────────────────────────────────────────────────────
+  - id: S10_armor_with_only_500lb
+    title: "Tank platoon, only F-16 with 4x GBU-38 (500 lb JDAM) on station"
+    inputs:
+      target:
+        type: vehicle_tracked_armor
+        description: "4x T-72 in column, dispersed 100m apart"
+        count: 4
+        movement: stationary
+        location: { lat: 38.900, lon: 39.200, elevation_ft_msl: 380 }
+        cnn_confidence: 0.96
+        tle_category: CAT_I
+      friendlies:
+        - { position: [38.915, 39.190], distance_m: 1800 }
+      civilians: []
+      protected_sites: []
+      aircraft:
+        platform: F-16
+        loadout: { GBU-38: { count: 4 } }
+      weather: clear
+      time_of_day: day
+      threats: []
+      drone_target_visual: true
+
+    expected_output:
+      engageability: ENGAGEABLE_WITH_CAVEATS
+      caveats: ["500 lb JDAM marginal effectiveness vs MBT (per matrix)"]
+      primary_munition: GBU-38
+      reasoning_summary: "Best of available; matrix marks 500-lb JDAM as MARGINAL vs MBT but it's what's on station."
+      recommendation: "Hold and request F-15E with GBU-31s, or accept reduced effects."
+
+    what_we_want_collen_to_grade:
+      - "Do you actually engage with what's on station, or hold for a better-fragged stack?"
+      - "Per-target loadout depth — would you split into 2 GBU-38 per tank for a chance at mobility kills?"

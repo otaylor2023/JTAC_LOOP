@@ -1,0 +1,497 @@
+# Munitions database — air-delivered weapons for CAS
+#
+# Sources cited per row:
+#   WPNS = Air Force Weapons File (2012) at /REFERENCES/ORDNANCE/Weapons File (2012).pdf
+#   JFIRE = JFIRE 2016 at /REFERENCES/ALSA PUBS/JFIRE (2016).pdf
+#   JP3093 = JP 3-09.3 (2014) at /REFERENCES/JOINT PUBS/JP 3-09.3 Close Air Support (2014).pdf
+#
+# Field definitions:
+#   class: bomb_lgb | bomb_jdam | bomb_unguided | bomb_sdb | missile_atgm | missile_em |
+#          gun | rocket | missile_standoff | cluster
+#   warhead_lb: warhead weight in pounds
+#   warhead_type: HE_blast_frag | penetrator | thermobaric | shaped_charge | kinetic | cluster
+#   guidance: laser | gps | gps_laser | ir | iir | electro_optical | anti_radiation | ballistic
+#   red_standing_m: 0.1% Pᵢ Standing distance from JFIRE Table 86 (the danger-close threshold)
+#   red_airburst_m: 0.1% Pᵢ Standing distance for airburst delivery, if differs (JFIRE Table 86)
+#   msd_m: minimum safe distance for training, JFIRE Table 88. NOT used for combat danger close.
+#   tle_required_m: max acceptable Target Location Error (90% confidence) to employ. From doctrine + sensible defaults.
+#   fuze_options: nose | tail | dual | airburst_proximity | delay | hard_target_smart_fuze
+#   delivery_aircraft: list of compatible platforms
+#   target_classes_doctrinally_effective_against: list (used by effectiveness matrix)
+#   restrictions: list of free-text restrictions (cite rules)
+#   citation: doctrinal source
+
+munitions:
+
+  # ─── 500 lb LASER-GUIDED BOMBS (Paveway II family) ─────────────────────
+  - id: GBU-12
+    name: GBU-12 Paveway II
+    class: bomb_lgb
+    effectiveness_class: bomb_lgb_500
+    warhead_lb: 500
+    warhead_type: HE_blast_frag
+    base_warhead: Mk-82
+    guidance: laser
+    red_standing_m: 275
+    red_airburst_m: null
+    msd_m: 1000
+    tle_required_m: 30  # laser homing tolerates moderate TLE because the laser spot is the aimpoint
+    fuze_options: [nose, tail, dual]
+    delivery_aircraft: [A-10, F-15E, F-16, F/A-18, AV-8B, B-1, B-52, F-35, MQ-9]
+    target_classes_doctrinally_effective_against:
+      [vehicle_wheeled_soft, vehicle_tracked_light, structure_soft, personnel_concentrated, bunker_unhardened]
+    restrictions:
+      - "Requires line-of-sight from designator to target (smoke / heavy cloud below release alt defeats laser)"
+      - "Effectiveness drops on movers above ~highway speed (AFTTP 6.3.4)"
+      - "Designator burn time ~20 s; lase last 8-12 s of weapon flight (JFO ¶1-158)"
+    citation: "WPNS p.73; JFIRE Table 86 p.131"
+
+  - id: GBU-16
+    name: GBU-16 Paveway II
+    class: bomb_lgb
+    effectiveness_class: bomb_lgb_2000
+    warhead_lb: 1000
+    warhead_type: HE_blast_frag
+    base_warhead: Mk-83
+    guidance: laser
+    red_standing_m: 310
+    msd_m: 1300
+    tle_required_m: 30
+    fuze_options: [nose, tail, dual]
+    delivery_aircraft: [F-15E, F/A-18, AV-8B, B-52]
+    target_classes_doctrinally_effective_against:
+      [vehicle_tracked_armor, structure_hardened, bunker_hardened, vehicle_wheeled_soft]
+    restrictions: ["Same laser limitations as GBU-12"]
+    citation: "WPNS; JFIRE Table 86 p.131"
+
+  - id: GBU-10
+    name: GBU-10 Paveway II
+    class: bomb_lgb
+    effectiveness_class: bomb_lgb_2000
+    warhead_lb: 2000
+    warhead_type: HE_blast_frag
+    base_warhead: Mk-84
+    guidance: laser
+    red_standing_m: 315
+    msd_m: 1600
+    tle_required_m: 30
+    fuze_options: [nose, tail, dual, hard_target_smart_fuze]
+    delivery_aircraft: [F-15E, F/A-18, B-1, B-52]
+    target_classes_doctrinally_effective_against:
+      [structure_hardened, bunker_hardened, vehicle_tracked_heavy_armor]
+    restrictions: ["Same laser limitations as GBU-12"]
+    citation: "WPNS; JFIRE Table 86 p.131"
+
+  # ─── GPS-GUIDED BOMBS (JDAM family) ────────────────────────────────────
+  # NOTE: Type 1 control PROHIBITED for these per JP 3-09.3 III-43 note
+  - id: GBU-38
+    name: GBU-38 JDAM (500 lb)
+    class: bomb_jdam
+    effectiveness_class: bomb_jdam_500
+    warhead_lb: 500
+    warhead_type: HE_blast_frag
+    base_warhead: Mk-82 / BLU-111
+    guidance: gps
+    red_standing_m: 290
+    red_airburst_m: 410
+    msd_m: 1100
+    tle_required_m: 10  # JDAM-grade requires near CAT-I coords (JFO ¶1-134)
+    fuze_options: [nose, tail, dual, airburst_proximity, delay]
+    delivery_aircraft: [F-15E, F-16, F/A-18, AV-8B, B-1, B-2, B-52, F-35]
+    target_classes_doctrinally_effective_against:
+      [vehicle_wheeled_soft, vehicle_tracked_light, structure_soft, personnel_concentrated, structure_hardened_with_delay_fuze]
+    restrictions:
+      - "REQUIRES near-CAT-I coordinates (TLE < 10 m); not viable from raw drone sensor (CAT III)"
+      - "TYPE 1 CONTROL PROHIBITED (JP 3-09.3 III-43 note) — must use Type 2 or 3"
+      - "GPS-denied environments degrade guidance"
+    citation: "WPNS; JFIRE Table 86 p.131; JP 3-09.3 III-43"
+
+  - id: GBU-32
+    name: GBU-32 JDAM (1000 lb)
+    class: bomb_jdam
+    effectiveness_class: bomb_jdam_2000
+    warhead_lb: 1000
+    warhead_type: HE_blast_frag
+    base_warhead: Mk-83 / BLU-110
+    guidance: gps
+    red_standing_m: 320
+    red_airburst_m: 410
+    msd_m: 1300
+    tle_required_m: 10
+    fuze_options: [nose, tail, dual, airburst_proximity, delay]
+    delivery_aircraft: [F-15E, F-16, F/A-18, B-1, B-2, B-52]
+    target_classes_doctrinally_effective_against:
+      [vehicle_tracked_armor, structure_hardened, bunker_hardened]
+    restrictions:
+      - "Same GPS / TLE / Type-1-prohibited rules as GBU-38"
+    citation: "WPNS; JFIRE Table 86 p.131"
+
+  - id: GBU-31
+    name: GBU-31 JDAM (2000 lb)
+    class: bomb_jdam
+    effectiveness_class: bomb_jdam_2000
+    warhead_lb: 2000
+    warhead_type: HE_blast_frag
+    base_warhead: Mk-84 / BLU-117
+    guidance: gps
+    red_standing_m: 335
+    red_airburst_m: 420
+    msd_m: 1500
+    tle_required_m: 10
+    fuze_options: [nose, tail, dual, airburst_proximity, delay]
+    delivery_aircraft: [F-15E, F-16, F/A-18, B-1, B-2, B-52]
+    target_classes_doctrinally_effective_against:
+      [structure_hardened, bunker_hardened, vehicle_tracked_heavy_armor]
+    restrictions: ["Same GPS / TLE / Type-1-prohibited rules"]
+    citation: "WPNS; JFIRE Table 86 p.131"
+
+  - id: GBU-31_v3_BLU-109
+    name: GBU-31(V)3 JDAM with BLU-109 penetrator
+    class: bomb_jdam
+    effectiveness_class: bomb_jdam_pen
+    warhead_lb: 2000
+    warhead_type: penetrator
+    base_warhead: BLU-109
+    guidance: gps
+    red_standing_m: 335
+    msd_m: 1500
+    tle_required_m: 10
+    fuze_options: [delay, hard_target_smart_fuze]
+    delivery_aircraft: [F-15E, F-16, F/A-18, B-1, B-2, B-52]
+    target_classes_doctrinally_effective_against:
+      [bunker_hardened, structure_hardened_underground, vehicle_tracked_heavy_armor]
+    restrictions:
+      - "Designed for hardened-target penetration; CDE behavior is in-target detonation"
+      - "Type 1 control prohibited"
+    citation: "WPNS; ATP 3-06.1 p.49"
+
+  - id: GBU-54
+    name: GBU-54 LJDAM (Laser JDAM)
+    class: bomb_jdam
+    effectiveness_class: bomb_jdam_500_laser
+    warhead_lb: 500
+    warhead_type: HE_blast_frag
+    base_warhead: Mk-82
+    guidance: gps_laser  # GPS primary, laser terminal homing for moving targets
+    red_standing_m: 290
+    msd_m: 1100
+    tle_required_m: 30  # laser terminal homing tolerates GPS error
+    fuze_options: [nose, tail, dual, airburst_proximity, delay]
+    delivery_aircraft: [F-15E, F-16, F/A-18, B-1]
+    target_classes_doctrinally_effective_against:
+      [vehicle_wheeled_soft_moving, vehicle_tracked_light_moving, vehicle_wheeled_soft, structure_soft]
+    restrictions:
+      - "Hybrid: better against movers than pure JDAM, more weather-tolerant than pure LGB"
+      - "Type 1 control prohibited (still GPS-guided)"
+    citation: "WPNS"
+
+  # ─── SMALL DIAMETER BOMB ────────────────────────────────────────────────
+  - id: GBU-39
+    name: GBU-39 SDB
+    class: bomb_sdb
+    effectiveness_class: bomb_sdb
+    warhead_lb: 250
+    warhead_type: HE_blast_frag
+    guidance: gps
+    red_standing_m: 205
+    red_airburst_m: 285
+    msd_m: 1200
+    tle_required_m: 10
+    fuze_options: [airburst_proximity, delay]
+    delivery_aircraft: [F-15E, F-16, F/A-18, F-35, B-1, B-2, B-52]
+    target_classes_doctrinally_effective_against:
+      [vehicle_wheeled_soft, structure_soft, personnel_concentrated]
+    restrictions:
+      - "Preferred urban CDE option due to small frag radius (ATP 3-06.1 p.49)"
+      - "Type 1 control prohibited"
+    citation: "WPNS; JFIRE Table 86 p.132; ATP 3-06.1"
+
+  - id: GBU-39_FLM
+    name: GBU-39 SDB Focused Lethality Munition
+    class: bomb_sdb
+    effectiveness_class: bomb_sdb_flm
+    warhead_lb: 250
+    warhead_type: HE_blast_frag
+    guidance: gps
+    red_standing_m: 70
+    msd_m: 1200
+    tle_required_m: 10
+    fuze_options: [airburst_proximity, delay]
+    delivery_aircraft: [F-15E, F-16, F/A-18]
+    target_classes_doctrinally_effective_against:
+      [vehicle_wheeled_soft, personnel_concentrated, structure_soft]
+    restrictions:
+      - "EXTREME-low-collateral option (RED 70 m) — preferred when civilians are very close"
+    citation: "JFIRE Table 86 p.132"
+
+  # ─── UNGUIDED GENERAL-PURPOSE BOMBS ─────────────────────────────────────
+  - id: Mk-82
+    name: Mk-82 (500 lb GP, unguided)
+    class: bomb_unguided
+    effectiveness_class: bomb_unguided
+    warhead_lb: 500
+    warhead_type: HE_blast_frag
+    guidance: ballistic
+    red_standing_m: 305
+    red_airburst_m: 425
+    msd_m: 1300
+    tle_required_m: 50
+    fuze_options: [nose, tail, dual, airburst_proximity]
+    delivery_aircraft: [A-10, F-15E, F-16, F/A-18, AV-8B, B-1, B-52]
+    target_classes_doctrinally_effective_against:
+      [personnel_concentrated, vehicle_wheeled_soft, structure_soft]
+    restrictions:
+      - "Unguided — wide CEP; not used near civilians or friendlies"
+      - "CDE Methodology highly discourages air-to-surface unguided munitions at Level 4+ (CJCSI 3160.01)"
+    citation: "WPNS p.73; JFIRE Table 86 p.131"
+
+  - id: Mk-83
+    name: Mk-83 (1000 lb GP, unguided)
+    class: bomb_unguided
+    effectiveness_class: bomb_unguided
+    warhead_lb: 1000
+    warhead_type: HE_blast_frag
+    guidance: ballistic
+    red_standing_m: 345
+    red_airburst_m: 435
+    msd_m: 1400
+    tle_required_m: 50
+    fuze_options: [nose, tail, dual, airburst_proximity]
+    delivery_aircraft: [F-15E, F/A-18, B-1, B-52]
+    target_classes_doctrinally_effective_against:
+      [structure_soft, vehicle_tracked_light]
+    restrictions: ["Same as Mk-82"]
+    citation: "JFIRE Table 86 p.131"
+
+  - id: Mk-84
+    name: Mk-84 (2000 lb GP, unguided)
+    class: bomb_unguided
+    effectiveness_class: bomb_unguided
+    warhead_lb: 2000
+    warhead_type: HE_blast_frag
+    guidance: ballistic
+    red_standing_m: 355
+    red_airburst_m: 440
+    msd_m: 1600
+    tle_required_m: 50
+    fuze_options: [nose, tail, dual, airburst_proximity]
+    delivery_aircraft: [F-15E, F/A-18, B-1, B-52]
+    target_classes_doctrinally_effective_against:
+      [structure_hardened, bunker_hardened]
+    restrictions: ["Same as Mk-82; almost never used in modern CAS"]
+    citation: "JFIRE Table 86 p.131"
+
+  # ─── MAVERICK ───────────────────────────────────────────────────────────
+  - id: AGM-65D
+    name: AGM-65D Maverick (IR)
+    class: missile_atgm
+    effectiveness_class: missile_iir
+    warhead_lb: 125
+    warhead_type: shaped_charge
+    guidance: iir
+    red_standing_m: 175
+    msd_m: 800
+    tle_required_m: 50  # autonomous IIR seeker — pilot acquires
+    fuze_options: [contact]
+    delivery_aircraft: [A-10, F-15E, F-16, F/A-18, AV-8B]
+    target_classes_doctrinally_effective_against:
+      [vehicle_tracked_armor, vehicle_wheeled_soft_moving, vehicle_tracked_light_moving, bunker_unhardened]
+    restrictions:
+      - "IIR seeker requires thermal contrast — degrades in heavy weather/dust/cool engines"
+      - "Excellent against movers — preferred over LGB when target is moving"
+    citation: "WPNS; JFIRE Table 86 p.131; AFTTP 6.3.4"
+
+  - id: AGM-65G
+    name: AGM-65G Maverick (IR, heavy warhead)
+    class: missile_atgm
+    effectiveness_class: missile_iir
+    warhead_lb: 300
+    warhead_type: HE_blast_frag
+    guidance: iir
+    red_standing_m: 175
+    msd_m: 800
+    tle_required_m: 50
+    fuze_options: [contact, delay]
+    delivery_aircraft: [A-10, F-15E, F-16, F/A-18]
+    target_classes_doctrinally_effective_against:
+      [structure_soft, structure_hardened, bunker_unhardened]
+    restrictions: ["Same IIR limits as AGM-65D"]
+    citation: "WPNS"
+
+  - id: AGM-65L
+    name: AGM-65L Maverick (laser)
+    class: missile_atgm
+    effectiveness_class: missile_atgm_l
+    warhead_lb: 300
+    warhead_type: HE_blast_frag
+    guidance: laser
+    red_standing_m: 175
+    msd_m: 800
+    tle_required_m: 30
+    fuze_options: [contact, delay]
+    delivery_aircraft: [A-10, F/A-18]
+    target_classes_doctrinally_effective_against:
+      [vehicle_tracked_armor, structure_soft, structure_hardened]
+    restrictions: ["Laser-guided variant — needs designator on target"]
+    citation: "WPNS"
+
+  # ─── HELLFIRE ──────────────────────────────────────────────────────────
+  - id: AGM-114K
+    name: AGM-114K Hellfire II
+    class: missile_atgm
+    effectiveness_class: missile_atgm_l
+    warhead_lb: 20  # tandem shaped-charge ~20 lb HE
+    warhead_type: shaped_charge
+    guidance: laser
+    red_standing_m: 110
+    msd_m: 900
+    tle_required_m: 30
+    fuze_options: [contact]
+    delivery_aircraft: [AH-64, MQ-1, MQ-9, OH-58, AH-1Z]
+    target_classes_doctrinally_effective_against:
+      [vehicle_tracked_armor, vehicle_wheeled_soft, bunker_unhardened, vehicle_wheeled_soft_moving]
+    restrictions:
+      - "Laser semi-active homing — needs designator (own platform or buddy-lase)"
+      - "Min 8 s between shots if buddy-lasing multiple Hellfires (V-23)"
+    citation: "WPNS; JFIRE Table 86 p.132"
+
+  - id: AGM-114N
+    name: AGM-114N Hellfire (thermobaric)
+    class: missile_atgm
+    effectiveness_class: missile_thermo
+    warhead_lb: 18
+    warhead_type: thermobaric
+    guidance: laser
+    red_standing_m: 110
+    msd_m: 900
+    tle_required_m: 30
+    fuze_options: [contact, delay]
+    delivery_aircraft: [AH-64, MQ-1, MQ-9, AH-1Z]
+    target_classes_doctrinally_effective_against:
+      [structure_soft, bunker_unhardened, personnel_in_cave_or_building]
+    restrictions:
+      - "Recommended for in-structure / cave engagements per ATP 3-06.1 p.49"
+      - "Thermobaric effects amplified in confined spaces"
+    citation: "WPNS; ATP 3-06.1 p.49"
+
+  - id: AGM-114R
+    name: AGM-114R Hellfire (multi-purpose)
+    class: missile_atgm
+    effectiveness_class: missile_atgm_l
+    warhead_lb: 20
+    warhead_type: HE_blast_frag
+    guidance: laser
+    red_standing_m: 130
+    msd_m: 900
+    tle_required_m: 30
+    fuze_options: [contact, delay, airburst_proximity]
+    delivery_aircraft: [AH-64, MQ-1, MQ-9, AH-1Z]
+    target_classes_doctrinally_effective_against:
+      [vehicle_tracked_armor, vehicle_wheeled_soft, structure_soft, personnel_concentrated]
+    restrictions: ["Multi-purpose successor; selectable fuze provides versatility"]
+    citation: "JFIRE Table 86 p.132"
+
+  # ─── 70 mm ROCKETS ──────────────────────────────────────────────────────
+  - id: APKWS
+    name: APKWS (Advanced Precision Kill Weapon System) 2.75-inch laser-guided rocket
+    class: rocket
+    warhead_lb: 10  # M151 or M229
+    warhead_type: HE_blast_frag
+    guidance: laser
+    red_standing_m: 95
+    msd_m: 500
+    tle_required_m: 30
+    fuze_options: [contact, airburst_proximity]
+    delivery_aircraft: [AH-1Z, AH-64, OH-58, F/A-18, AV-8B]
+    target_classes_doctrinally_effective_against:
+      [vehicle_wheeled_soft, personnel_concentrated, light_boat]
+    restrictions: ["Smallest precision air-to-surface — preferred for very-tight CDE"]
+    citation: "JFIRE Table 86 p.132"
+
+  - id: 2.75_HE_unguided
+    name: 2.75-inch unguided rocket (HE)
+    class: rocket
+    warhead_lb: 10
+    warhead_type: HE_blast_frag
+    guidance: ballistic
+    red_standing_m: 290  # low altitude delivery
+    msd_m: 700
+    tle_required_m: 100
+    fuze_options: [contact]
+    delivery_aircraft: [AH-1Z, AH-64, OH-58]
+    target_classes_doctrinally_effective_against:
+      [personnel_open, vehicle_wheeled_soft, light_boat]
+    restrictions: ["Unguided — area weapon"]
+    citation: "JFIRE Table 86 p.132"
+
+  # ─── GUNS ────────────────────────────────────────────────────────────────
+  # NOTE: direct-fire <105 mm exempt from CDE methodology (CJCSI 3160.01 p.D-4)
+  - id: GAU-8
+    name: A-10 GAU-8 30 mm (Avenger)
+    class: gun
+    warhead_lb: 0.7
+    warhead_type: HE_or_AP
+    guidance: ballistic
+    red_standing_m: 95
+    msd_m: 500
+    tle_required_m: 100
+    fuze_options: [contact]
+    delivery_aircraft: [A-10]
+    target_classes_doctrinally_effective_against:
+      [vehicle_tracked_light, vehicle_wheeled_soft, personnel_open, personnel_concentrated]
+    restrictions:
+      - "Direct fire <105 mm — EXEMPT from CDE methodology (CJCSI 3160.01 p.D-4)"
+      - "30° cone + ricochet fan — be cautious in built-up areas"
+    citation: "JFIRE Table 86 p.133"
+
+  - id: gun_20mm
+    name: 20 mm cannon (M61, F-15/F-16/F-18 internal)
+    class: gun
+    warhead_lb: 0.2
+    warhead_type: HE_frag
+    guidance: ballistic
+    red_standing_m: 95
+    msd_m: 500
+    tle_required_m: 100
+    fuze_options: [contact]
+    delivery_aircraft: [F-15E, F-16, F/A-18, AV-8B]
+    target_classes_doctrinally_effective_against:
+      [personnel_open, personnel_concentrated, vehicle_wheeled_soft, light_boat]
+    restrictions: ["Direct fire <105 mm — exempt from CDE"]
+    citation: "JFIRE Table 86 p.133"
+
+  - id: AC130_105
+    name: AC-130 105 mm howitzer
+    class: gun
+    warhead_lb: 33
+    warhead_type: HE_frag
+    guidance: ballistic
+    red_standing_m: 190
+    msd_m: 700
+    tle_required_m: 50
+    fuze_options: [contact, delay, airburst_proximity]
+    delivery_aircraft: [AC-130]
+    target_classes_doctrinally_effective_against:
+      [structure_soft, personnel_concentrated, vehicle_wheeled_soft, vehicle_tracked_light]
+    restrictions:
+      - "105 mm — boundary case, technically 105 = inclusive of CDE"
+      - "AC-130 inverse-frag tactic in urban: shoot over target, frag back (ATP 3-06.1)"
+    citation: "JFIRE Table 86 p.133; ATP 3-06.1"
+
+  # ─── CLUSTER MUNITIONS — included for completeness, but ROE typically prohibits ──
+  - id: CBU-87
+    name: CBU-87 Combined Effects Munition
+    class: cluster
+    warhead_lb: 950
+    warhead_type: cluster
+    guidance: ballistic
+    red_standing_m: 300
+    msd_m: 2000
+    tle_required_m: 100
+    fuze_options: [airburst]
+    delivery_aircraft: [F-15E, F-16, B-1, B-52]
+    target_classes_doctrinally_effective_against: [vehicle_armor_dispersed, personnel_dispersed]
+    restrictions:
+      - "CDE methodology DOES NOT support cluster at Level 3+ (CJCSI 3160.01 p.D-A-22)"
+      - "ROE typically prohibits — include only as last-resort area weapon against dispersed armor"
+    citation: "JFIRE Table 86 p.131; CJCSI 3160.01"

@@ -1,0 +1,116 @@
+# Risk Estimate Distance — danger close threshold table
+#
+# Source: JFIRE 2016, Tables 81-87 (pp. 128-134)
+# /REFERENCES/ALSA PUBS/JFIRE (2016).pdf
+#
+# Doctrinal definition of danger close (JP 3-09.3 III-36):
+#   "Ordnance delivery inside the 0.1 percent Pᵢ distance will be considered 'danger close.'"
+#   "Pᵢ" = probability of incapacitation. 0.1% = 1-in-1000 risk to a standing soldier in summer-weight uniform.
+#
+# Danger close procedure (JP 3-09.3 III-36):
+#   "The supported commander must accept responsibility for the risk to friendly forces when targets are inside
+#    the 0.1 percent Pᵢ distance. Risk acceptance is confirmed when the supported commander passes their initials
+#    to the attacking CAS aircraft through the JTAC/FAC(A)."
+#
+# Use the STANDING column for danger-close trigger regardless of friendly posture (JFIRE p.127).
+#
+# How the decision tree uses this table:
+#   if friendly_distance_m <= red_standing_m[munition]:
+#     flag = "DANGER CLOSE"
+#     require: ground_force_commander_initials
+#     enforce: Type 1 control
+#     record: weapon_axis_parallel_to_friendly_axis if possible (JP 3-09.3 III-36 quoted text)
+
+# ─── AIR-DELIVERED WEAPONS (JFIRE Table 86, p.131-133) ─────────────────────
+# Format: contact_fuze / airburst_fuze (m). null = not specified or N/A.
+
+air_delivered:
+  Mk-82: { contact: 305, airburst: 425, citation: "JFIRE Table 86 p.131" }
+  Mk-83: { contact: 345, airburst: 435, citation: "JFIRE Table 86 p.131" }
+  Mk-84: { contact: 355, airburst: 440, citation: "JFIRE Table 86 p.131" }
+  GBU-10: { contact: 315, airburst: null, citation: "JFIRE Table 86 p.131" }
+  GBU-12: { contact: 275, airburst: null, citation: "JFIRE Table 86 p.131" }
+  GBU-16: { contact: 310, airburst: null, citation: "JFIRE Table 86 p.131" }
+  GBU-31: { contact: 335, airburst: 420, citation: "JFIRE Table 86 p.131" }
+  GBU-32: { contact: 320, airburst: 410, citation: "JFIRE Table 86 p.131" }
+  GBU-38: { contact: 290, airburst: 410, citation: "JFIRE Table 86 p.131" }
+  GBU-39: { contact: 205, airburst: 285, citation: "JFIRE Table 86 p.132" }
+  GBU-39_FLM: { contact: 70, airburst: null, citation: "JFIRE Table 86 p.132" }
+  GBU-44_Viper_Strike: { contact: 85, airburst: null, citation: "JFIRE Table 86 p.132" }
+  CBU-87: { contact: 300, airburst: null, citation: "JFIRE Table 86 p.131" }
+  AGM-65_Maverick: { contact: 175, airburst: null, citation: "JFIRE Table 86 p.131" }
+  AGM-114_KMN: { contact: 110, airburst: null, citation: "JFIRE Table 86 p.132" }
+  AGM-114R: { contact: 130, airburst: null, citation: "JFIRE Table 86 p.132" }
+  Hydra_70_med_alt: { contact: 265, airburst: null, citation: "JFIRE Table 86 p.132" }
+  Hydra_70_low_alt: { contact: 290, airburst: null, citation: "JFIRE Table 86 p.132" }
+  Zuni_5in: { contact: 340, airburst: null, citation: "JFIRE Table 86 p.132" }
+  FW_gun_20mm: { contact: 95, airburst: null, citation: "JFIRE Table 86 p.133" }
+  FW_gun_25_30mm: { contact: 95, airburst: null, citation: "JFIRE Table 86 p.133" }
+  AC-130_105: { contact: 190, airburst: null, citation: "JFIRE Table 86 p.133" }
+  AC-130W_30mm: { contact: 100, airburst: null, citation: "JFIRE Table 86 p.133" }
+
+# ─── ROTARY-WING (JFIRE Table 87, p.134) — range-dependent ─────────────────
+# Format: { range_m: red_m }
+rotary_wing:
+  AH-1_20mm:
+    "300": 60
+    "1500": 115
+    citation: "JFIRE Table 87 p.134"
+  AH-64_30mm:
+    "500": 75
+    "1500": 115
+    citation: "JFIRE Table 87 p.134"
+  Hydra_70_HE:
+    "300": 140
+    "1500": 305
+    citation: "JFIRE Table 87 p.134"
+  AGM-114_KMNFAL:
+    "all_ranges": 110
+    citation: "JFIRE Table 87 p.134"
+  AGM-114R:
+    "all_ranges": 130
+    citation: "JFIRE Table 87 p.134"
+  APKWS:
+    "all_ranges": 95
+    citation: "JFIRE Table 87 p.134"
+
+# ─── INDIRECT FIRE (JFIRE Tables 81-82, p.128-129) ─────────────────────────
+# Note: indirect fire DANGER CLOSE for the call-for-fire format is a fixed trigger (600 m for arty/mortars,
+# 750 m for naval gunfire) per ATP 3-09.30 ¶4-35. The table below is the actual 0.1% Pᵢ standing distance.
+indirect_fire:
+  M224_60mm_mortar: { red_standing_m: 145, danger_close_cff_trigger_m: 600 }
+  M252_81mm_mortar: { red_standing_m: 195, danger_close_cff_trigger_m: 600 }
+  M120_120mm_mortar: { red_standing_m: 430, danger_close_cff_trigger_m: 600 }
+  105mm_M119_HE: { red_standing_m: 455, danger_close_cff_trigger_m: 600 }
+  155mm_M109A6_M777_HE: { red_standing_m: 695, danger_close_cff_trigger_m: 600 }
+  155mm_DPICM_M483A1: { red_standing_m: 510, danger_close_cff_trigger_m: 600 }
+  155mm_RAP: { red_standing_m: 1045, danger_close_cff_trigger_m: 600 }
+  Naval_5in_54_62: { red_standing_m: 595, danger_close_cff_trigger_m: 750 }
+  TLAM: { red_standing_m: 300, danger_close_cff_trigger_m: 1000 }
+  citation_for_all: "JFIRE Tables 81-85 pp.128-130; ATP 3-09.30 ¶4-35 for CFF trigger"
+
+# ─── DECISION RULES ─────────────────────────────────────────────────────────
+rules:
+  trigger_danger_close:
+    description: "Friendly distance is at or inside the RED standing distance for the chosen munition+fuze."
+    condition: "friendly_distance_m <= red_standing_m"
+    actions:
+      - flag: "DANGER CLOSE"
+      - require: "Ground Force Commander initials passed to aircrew via JTAC"
+      - require: "Type 1 control (visual on aircraft AND target)"
+      - prefer: "Weapon axis parallel to friendly orientation (reduces long/short fratricide risk)"
+    citation: "JP 3-09.3 III-36; JFIRE Appendix H p.127"
+
+  block_below_red:
+    description: "If friendly distance is significantly below RED, flag for elevated review even with initials."
+    condition: "friendly_distance_m < (0.5 * red_standing_m)"
+    actions:
+      - flag: "EXTREME DANGER CLOSE — system recommends munition substitution"
+      - escalate: "GFC review elevated; recommend smaller-frag alternative"
+
+  no_strike_protected_in_red:
+    description: "If a hospital, school, mosque, or other Cat I no-strike site is within RED, BLOCK the munition."
+    condition: "any(no_strike_site within red_standing_m radius)"
+    actions:
+      - block: "munition not viable — choose smaller-frag alternative"
+    citation: "CJCSI 3160.01 Encl B"

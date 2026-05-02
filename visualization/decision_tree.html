@@ -1,0 +1,696 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JTAC 9-Line Decision Tree - Visualization</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<style>
+  :root { color-scheme: light; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  .mermaid { background: #fafafa; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; }
+  .legend-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 9999px; font-size: 12px; font-weight: 600; }
+  .swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .callout { border-left: 4px solid; padding: 12px 16px; border-radius: 6px; }
+  .callout-green { border-color: #16a34a; background: #f0fdf4; }
+  .callout-yellow { border-color: #ca8a04; background: #fefce8; }
+  .callout-red { border-color: #dc2626; background: #fef2f2; }
+  .callout-blue { border-color: #2563eb; background: #eff6ff; }
+  .callout-gray { border-color: #6b7280; background: #f9fafb; }
+  .citation { font-size: 11px; color: #6b7280; font-style: italic; margin-top: 8px; }
+  .nine-line-row { display: grid; grid-template-columns: 90px 1fr; gap: 12px; padding: 8px 0; border-bottom: 1px dashed #d1d5db; }
+  .nine-line-row:last-child { border-bottom: none; }
+  .nine-line-label { font-weight: 700; color: #374151; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 13px; }
+  .nine-line-value { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 14px; color: #111827; }
+  details summary { cursor: pointer; }
+  .glossary-grid { display: grid; grid-template-columns: 140px 1fr; gap: 4px 16px; font-size: 13px; }
+  .glossary-grid dt { font-weight: 700; color: #1f2937; }
+  .glossary-grid dd { color: #4b5563; margin: 0; }
+  @media print {
+    body { font-size: 11px; }
+    .no-print { display: none !important; }
+    .page-break { page-break-before: always; }
+    .mermaid svg { max-width: 100% !important; height: auto !important; }
+    section { break-inside: avoid; }
+  }
+  /* Sticky glossary toggle */
+  .sticky-tools { position: fixed; bottom: 16px; right: 16px; z-index: 50; }
+</style>
+</head>
+<body class="bg-white text-gray-900">
+
+<!-- ================ HEADER ================ -->
+<header class="bg-slate-900 text-white py-8 px-6 print:py-4">
+  <div class="max-w-6xl mx-auto">
+    <div class="text-xs uppercase tracking-widest text-slate-400 mb-2">Hackathon Visualization &middot; For JTAC review (Collen) and judges</div>
+    <h1 class="text-3xl md:text-4xl font-bold mb-2">Auto-Generated 9-Line CAS Brief</h1>
+    <p class="text-lg text-slate-300">A deterministic decision tree that turns drone video + friendly positions into a draft Close Air Support brief, with mandatory human approval at every step.</p>
+    <div class="mt-4 flex flex-wrap gap-2 text-sm">
+      <span class="legend-pill bg-emerald-100 text-emerald-900"><span class="swatch bg-emerald-500"></span>GREEN = passes / engageable</span>
+      <span class="legend-pill bg-amber-100 text-amber-900"><span class="swatch bg-amber-500"></span>YELLOW = caveat / GFC initials</span>
+      <span class="legend-pill bg-rose-100 text-rose-900"><span class="swatch bg-rose-500"></span>RED = blocks engagement</span>
+      <span class="legend-pill bg-sky-100 text-sky-900"><span class="swatch bg-sky-500"></span>BLUE = human-in-the-loop</span>
+    </div>
+  </div>
+</header>
+
+<!-- ================ TABLE OF CONTENTS ================ -->
+<nav class="border-b border-gray-200 bg-gray-50 no-print">
+  <div class="max-w-6xl mx-auto px-6 py-3 text-sm flex flex-wrap gap-x-5 gap-y-1">
+    <a class="text-sky-700 hover:underline" href="#architecture">Architecture</a>
+    <a class="text-sky-700 hover:underline" href="#spine">Approval Spine</a>
+    <a class="text-sky-700 hover:underline" href="#pid">Corroborating PID Gate</a>
+    <a class="text-sky-700 hover:underline" href="#tree1">Tree 1: Engageability</a>
+    <a class="text-sky-700 hover:underline" href="#tree2">Tree 2: Munition</a>
+    <a class="text-sky-700 hover:underline" href="#tree3">Tree 3: Control Type</a>
+    <a class="text-sky-700 hover:underline" href="#tree4">Tree 4: Mark</a>
+    <a class="text-sky-700 hover:underline" href="#tree5">Tree 5: IP / Egress</a>
+    <a class="text-sky-700 hover:underline" href="#tree6">Tree 6: Restrictions</a>
+    <a class="text-sky-700 hover:underline" href="#sample">Sample 9-Line</a>
+    <a class="text-sky-700 hover:underline" href="#glossary">Glossary</a>
+  </div>
+</nav>
+
+<main class="max-w-6xl mx-auto px-6 py-8 space-y-12">
+
+<!-- ================ TOP-LEVEL ARCHITECTURE ================ -->
+<section id="architecture">
+  <h2 class="text-2xl font-bold border-b-2 border-slate-900 pb-2 mb-4">1. The system, end to end</h2>
+  <p class="text-base text-gray-700 mb-4 max-w-3xl">A drone watches the battlefield. Deterministic functions extract features (distance to friendlies, target hardness, weather, airspace). Six decision sub-trees run in sequence and produce a draft 9-line CAS brief. The JTAC reviews. The Ground Force Commander approves. Then it goes to the aircrew. <strong>Nothing is generated by an LLM. Nothing fires automatically.</strong></p>
+
+  <div class="mermaid">
+flowchart TD
+  A["DRONE FEED + FRIENDLIES + AIRCRAFT + WEATHER + ROE"]:::input
+  B["FEATURE EXTRACTION<br/>(deterministic functions)<br/>distance to friendlies, target hardness,<br/>position uncertainty, civilian density,<br/>active airspace gates"]:::process
+  C["SIX DECISION TREES<br/>(in sequence)"]:::process
+  D["COMPOSE 9-LINE<br/>(top recommendation + 2 alternatives<br/>+ reasoning trace)"]:::process
+  E["JTAC REVIEW<br/>Confirm / Alter / Deny"]:::human
+  F["GFC APPROVAL<br/>Mandatory"]:::human
+  G["TRANSMIT TO AIRCREW"]:::output
+
+  A --> B --> C --> D --> E --> F --> G
+
+  classDef input fill:#e0f2fe,stroke:#0369a1,stroke-width:2px,color:#0c4a6e;
+  classDef process fill:#f1f5f9,stroke:#334155,stroke-width:2px,color:#0f172a;
+  classDef human fill:#dbeafe,stroke:#1d4ed8,stroke-width:3px,color:#1e3a8a;
+  classDef output fill:#dcfce7,stroke:#15803d,stroke-width:2px,color:#14532d;
+  </div>
+
+  <div class="grid md:grid-cols-2 gap-4 mt-6">
+    <div class="callout callout-blue">
+      <div class="font-bold mb-1">Doctrinal frame: our drone is a JFO, not a JTAC</div>
+      <div class="text-sm">A Joint Fires Observer feeds targeting data and marks targets but cannot independently terminate a CAS attack. So the system's output is a <em>draft brief for a JTAC</em>, not a strike order. This is the legal posture that lets the system exist.</div>
+      <div class="citation">Source: JFO ATTP &para;1-3, &para;1-9</div>
+    </div>
+    <div class="callout callout-gray">
+      <div class="font-bold mb-1">Why deterministic instead of an LLM</div>
+      <div class="text-sm">Every output traces to a specific YAML rule and a specific manual paragraph. Hallucinations are impossible because nothing is generated. Operators trust it because it matches their mental model. Novel scenarios fail safely by routing to "JTAC review required."</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================ THE SPINE ================ -->
+<section id="spine" class="page-break">
+  <h2 class="text-2xl font-bold border-b-2 border-slate-900 pb-2 mb-4">2. The approval spine (non-negotiable)</h2>
+  <p class="text-base text-gray-700 mb-4 max-w-3xl">The 9-line ALWAYS routes drone &rarr; system &rarr; JTAC &rarr; GFC &rarr; aircrew. No bypasses. No automation past the JTAC.</p>
+
+  <div class="mermaid">
+flowchart LR
+  D["DRONE<br/>(sensor)"]:::sensor
+  S["SYSTEM<br/>(this decision tree)"]:::system
+  J["JTAC<br/>Confirm / Alter / Deny"]:::human
+  G["GROUND FORCE<br/>COMMANDER<br/>Approve / Reject"]:::human
+  A["AIRCREW<br/>(executes)"]:::aircraft
+
+  D -->|video + coords| S
+  S -->|draft 9-line<br/>+ reasoning trace| J
+  J -->|reviewed brief<br/>+ JTAC initials| G
+  G -->|approved brief<br/>+ GFC initials| J
+  J -->|read brief on radio| A
+
+  classDef sensor fill:#f1f5f9,stroke:#475569,color:#0f172a;
+  classDef system fill:#fef3c7,stroke:#a16207,color:#713f12;
+  classDef human fill:#dbeafe,stroke:#1d4ed8,stroke-width:3px,color:#1e3a8a;
+  classDef aircraft fill:#dcfce7,stroke:#15803d,color:#14532d;
+  </div>
+
+  <div class="callout callout-yellow mt-4">
+    <div class="font-bold mb-1">The system never speaks directly to the aircrew.</div>
+    <div class="text-sm">Even with high tree confidence, even with all gates green, the brief stops at the JTAC for review and at the GFC for approval. Self-defense scenarios accelerate the process but do not bypass the humans in the loop.</div>
+    <div class="citation">Source: JP 3-09.3 III-42 to III-46; CJCSI 3160.01 p.D-3</div>
+  </div>
+</section>
+
+<!-- ================ CORROBORATING PID GATE ================ -->
+<section id="pid" class="page-break">
+  <h2 class="text-2xl font-bold border-b-2 border-slate-900 pb-2 mb-4">3. The corroborating-sources gate (PID)</h2>
+  <p class="text-base text-gray-700 mb-4 max-w-3xl"><strong>Drone video alone is not enough to identify a target.</strong> Doctrine is explicit. The system requires at least 2 independent sources before it will declare a target engageable.</p>
+
+  <div class="mermaid">
+flowchart TD
+  V["Drone video<br/>+ CNN classification<br/>(source #1)"]:::yellow
+  V --> Q{"At least one<br/>corroborating source?"}:::decision
+  Q -->|YES| OK["PID GATE PASSED<br/>(continue to engageability checks)"]:::green
+  Q -->|NO| BLOCK["NOT ENGAGEABLE<br/>'Insufficient PID — single-source FMV<br/>does not meet doctrinal standard'"]:::red
+
+  G["Ground-team visual<br/>or radio"]:::yellow -.corroborates.-> Q
+  S["SIGINT correlation<br/>(radio intercept, RF emission)"]:::yellow -.corroborates.-> Q
+  M["Multi-pass observation<br/>(sustained tracking >30s)"]:::yellow -.corroborates.-> Q
+  O["Operator override<br/>(logged justification)"]:::yellow -.corroborates.-> Q
+
+  classDef yellow fill:#fef9c3,stroke:#a16207,color:#713f12;
+  classDef green fill:#dcfce7,stroke:#15803d,color:#14532d;
+  classDef red fill:#fee2e2,stroke:#b91c1c,color:#7f1d1d;
+  classDef decision fill:#e0e7ff,stroke:#3730a3,color:#1e1b4b;
+  </div>
+
+  <div class="callout callout-red mt-4">
+    <div class="font-bold mb-1">Verbatim doctrine</div>
+    <div class="text-sm italic">"Video feeds should not be used as a single-source target identification method."</div>
+    <div class="citation">Source: JFO ATTP &para;1-136; CJCSI 3160.01 p.D-A-7</div>
+  </div>
+</section>
+
+<!-- ================ TREE 1 ================ -->
+<section id="tree1" class="page-break">
+  <h2 class="text-2xl font-bold border-b-2 border-slate-900 pb-2 mb-1">Tree 1 &mdash; Engageability gate</h2>
+  <p class="text-gray-700 mb-4 max-w-3xl"><strong>Purpose:</strong> Can we even consider engaging this target? Pre-flight checks before any weapon selection.</p>
+
+  <div class="mermaid">
+flowchart TD
+  START(["Start"]):::start
+  SD{"Friendlies taking<br/>effective fire?"}:::decision
+  PID{"&ge;2 independent<br/>PID sources?"}:::decision
+  CONF{"CNN confidence<br/>&ge; 0.85?"}:::decision
+  OBS{"Observed &ge; 30s<br/>consistently?"}:::decision
+  NSL1{"On No-Strike List<br/>Cat I (hospital, school,<br/>mosque, etc.)?"}:::decision
+  NSL2{"Cat II protected<br/>(housing, market,<br/>utility)?"}:::decision
+  AIR{"Inside permissive<br/>airspace?<br/>(NFA / RFA / kill box)"}:::decision
+  ROE{"Target class authorized<br/>by current ROE?"}:::decision
+  TLE{"Position fix &le; CAT III<br/>(~30 m)?"}:::decision
+  HOST{"Hostile act / intent<br/>or on approved list?"}:::decision
+  CDE{"CDE Level 1 clean?<br/>(dual-use, CBR, environmental,<br/>protected sites)"}:::decision
+
+  PASS["ENGAGEABLE<br/>&rarr; Tree 2"]:::green
+  CAVEAT["ENGAGEABLE WITH CAVEATS<br/>(flags attached)"]:::yellow
+  BLOCK_PID["NOT ENGAGEABLE<br/>insufficient PID"]:::red
+  BLOCK_NSL["NOT ENGAGEABLE<br/>NSL Cat I match"]:::red
+  BLOCK_AIR["NOT ENGAGEABLE<br/>airspace blocks"]:::red
+  BLOCK_ROE["NOT ENGAGEABLE<br/>ROE category not approved"]:::red
+  BLOCK_TLE["NOT ENGAGEABLE<br/>position uncertainty too high"]:::red
+  BLOCK_HOST["NOT ENGAGEABLE<br/>no hostile act / intent"]:::red
+  SDOK["SELF-DEFENSE OVERRIDE<br/>(NSL + ROE bypassed,<br/>PID + airspace + DC preserved)"]:::blue
+
+  START --> SD
+  SD -->|YES| SDOK
+  SD -->|NO| PID
+  PID -->|YES| CONF
+  PID -->|NO| BLOCK_PID
+  CONF -->|YES| OBS
+  CONF -->|"NO (flag)"| OBS
+  OBS -->|YES| NSL1
+  OBS -->|"NO (flag)"| NSL1
+  NSL1 -->|YES| BLOCK_NSL
+  NSL1 -->|NO| NSL2
+  NSL2 -->|"YES (flag CDE elevated)"| AIR
+  NSL2 -->|NO| AIR
+  AIR -->|"NO (NFA / closed)"| BLOCK_AIR
+  AIR -->|"YES (or RFA flag)"| ROE
+  ROE -->|YES| TLE
+  ROE -->|NO| BLOCK_ROE
+  TLE -->|YES| HOST
+  TLE -->|NO| BLOCK_TLE
+  HOST -->|YES| CDE
+  HOST -->|NO| BLOCK_HOST
+  CDE -->|"clean"| PASS
+  CDE -->|"flags attached"| CAVEAT
+  SDOK --> PASS
+
+  classDef start fill:#e2e8f0,stroke:#475569,color:#1e293b;
+  classDef decision fill:#e0e7ff,stroke:#3730a3,color:#1e1b4b;
+  classDef green fill:#dcfce7,stroke:#15803d,color:#14532d;
+  classDef yellow fill:#fef9c3,stroke:#a16207,color:#713f12;
+  classDef red fill:#fee2e2,stroke:#b91c1c,color:#7f1d1d;
+  classDef blue fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a;
+  </div>
+
+  <div class="callout callout-yellow mt-4">
+    <div class="font-bold mb-1">Key facts</div>
+    <ul class="text-sm list-disc list-inside space-y-1">
+      <li><strong>Self-defense bypasses NSL and ROE category checks</strong>, but PID + airspace + danger close are preserved.</li>
+      <li><strong>NSL Cat I</strong> = hospitals, schools, religious sites, diplomatic missions, refugee camps, POW camps, dams whose breach floods civilians.</li>
+      <li><strong>NSL Cat II</strong> = private housing, public utilities, markets &mdash; not blocking, but escalates CDE review.</li>
+      <li><strong>TLE CAT III &asymp; 30 m</strong> from a drone alone. Anything worse cannot be precision-engaged without mensuration (PSS-SOF).</li>
+      <li><strong>CNN confidence threshold 0.85</strong> is a starting value &mdash; tunable with Collen.</li>
+    </ul>
+    <div class="citation">Source: CJCSI 3160.01 Encl A &amp; B; JFO ATTP &para;1-129 to &para;1-136; Kill Box 2014; JP 3-52</div>
+  </div>
+</section>
+
+<!-- ================ TREE 2 ================ -->
+<section id="tree2" class="page-break">
+  <h2 class="text-2xl font-bold border-b-2 border-slate-900 pb-2 mb-1">Tree 2 &mdash; Munition selection</h2>
+  <p class="text-gray-700 mb-4 max-w-3xl"><strong>Purpose:</strong> Of the weapons the responding aircraft is carrying, which can do this job? Three stages: filter, flag, rank.</p>
+
+  <div class="mermaid">
+flowchart TD
+  IN["Aircraft loadout<br/>(e.g., GBU-12 x4, AGM-65D x2,<br/>GAU-8 1100rds)"]:::start
+
+  subgraph HARD["STAGE 2A &mdash; HARD FILTER (eliminate)"]
+    F1["TLE compatibility<br/>(GPS bombs need CAT I)"]:::filter
+    F2["Target class viability<br/>(weapon vs target type matrix)"]:::filter
+    F3["Weather supports guidance<br/>(laser needs &gt;5000 ft ceiling)"]:::filter
+    F4["Aircraft can deliver<br/>(platform + count)"]:::filter
+    F5["Cat I protected site<br/>inside RED &rarr; ELIMINATE"]:::filter
+    F6["ROE prohibits weapon class<br/>(e.g., cluster)"]:::filter
+  end
+
+  subgraph FLAG["STAGE 2B &mdash; FLAG (annotate survivors)"]
+    G1["DANGER CLOSE<br/>friendly &le; RED standing"]:::yellow
+    G2["EXTREME DC<br/>friendly &lt; 0.5 &times; RED"]:::yellow
+    G3["CDE elevated<br/>Cat II in danger circle"]:::yellow
+    G4["TYPE 1 PROHIBITED<br/>(GPS / GPS-laser)"]:::yellow
+    G5["RELEASE ALT RESTRICTED"]:::yellow
+  end
+
+  subgraph RANK["STAGE 2C &mdash; RANK (effectiveness + tiebreakers)"]
+    R1["Effectiveness score<br/>(PREFERRED 1.0, ACCEPTABLE 0.7,<br/>MARGINAL 0.4, NOT_REC 0.0)"]:::rank
+    R2["Tiebreakers:<br/>1. friendly safety margin<br/>2. collateral minimization<br/>3. loadout depth<br/>4. aircrew familiarity<br/>5. time to target"]:::rank
+  end
+
+  OUT["TOP 3 RECOMMENDATIONS<br/>+ flags + reasoning trace"]:::green
+
+  IN --> HARD --> FLAG --> RANK --> OUT
+
+  classDef start fill:#e2e8f0,stroke:#475569,color:#1e293b;
+  classDef filter fill:#fee2e2,stroke:#b91c1c,color:#7f1d1d;
+  classDef yellow fill:#fef9c3,stroke:#a16207,color:#713f12;
+  classDef rank fill:#e0e7ff,stroke:#3730a3,color:#1e1b4b;
+  classDef green fill:#dcfce7,stroke:#15803d,color:#14532d;
+  </div>
+
+  <div class="callout callout-red mt-4">
+    <div class="font-bold mb-1">Danger close = friendly distance &le; RED standing column for chosen munition (JFIRE Table 86, 0.1% Pᵢ)</div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2 text-sm">
+      <div class="bg-white p-2 rounded border"><span class="font-mono">AGM-114 K/M/N</span><br/><strong>110 m</strong></div>
+      <div class="bg-white p-2 rounded border"><span class="font-mono">AGM-114R</span><br/><strong>130 m</strong></div>
+      <div class="bg-white p-2 rounded border"><span class="font-mono">GBU-39 SDB</span><br/><strong>205 m</strong></div>
+      <div class="bg-white p-2 rounded border"><span class="font-mono">GBU-12 (500 lb LGB)</span><br/><strong>275 m</strong></div>
+      <div class="bg-white p-2 rounded border"><span class="font-mono">GBU-38 (500 lb JDAM)</span><br/><strong>290 m</strong></div>
+      <div class="bg-white p-2 rounded border"><span class="font-mono">Mk-82 unguided</span><br/><strong>305 m</strong></div>
+      <div class="bg-white p-2 rounded border"><span class="font-mono">GBU-31 (2000 lb JDAM)</span><br/><strong>335 m</strong></div>
+      <div class="bg-white p-2 rounded border"><span class="font-mono">Mk-84 unguided</span><br/><strong>355 m</strong></div>
+    </div>
+    <div class="citation">Source: JP 3-09.3 III-36; JFIRE Table 86 (2016) p.131-133</div>
+  </div>
+
+  <div class="callout callout-yellow mt-4">
+    <div class="font-bold mb-1">Key facts</div>
+    <ul class="text-sm list-disc list-inside space-y-1">
+      <li><strong>JDAM family (GBU-31/32/38) requires CAT I (&lt;10 m) coordinates</strong> &mdash; drone alone produces CAT III, so JDAMs are eliminated unless coordinates are mensurated.</li>
+      <li><strong>Laser-guided weapons need cloud ceiling &gt; 5000 ft.</strong> Heavy smoke or dust eliminates them too.</li>
+      <li><strong>If a Cat I no-strike site is inside the weapon's RED, the weapon is eliminated.</strong> No initials override that.</li>
+      <li><strong>If friendlies are inside RED, the weapon flags DANGER CLOSE</strong> &mdash; not blocked, but requires GFC initials and Type 1 control if viable.</li>
+    </ul>
+    <div class="citation">Source: AFTTP 3-3.JTAC &sect;6.4; CJCSI 3160.01 Encl B; JFIRE Appendix H</div>
+  </div>
+</section>
+
+<!-- ================ TREE 3 ================ -->
+<section id="tree3" class="page-break">
+  <h2 class="text-2xl font-bold border-b-2 border-slate-900 pb-2 mb-1">Tree 3 &mdash; Control type</h2>
+  <p class="text-gray-700 mb-4 max-w-3xl"><strong>Purpose:</strong> How tightly does the JTAC supervise each weapons release? Type 1 (tightest) / Type 2 (default) / Type 3 (multi-attack).</p>
+
+  <div class="mermaid">
+flowchart TD
+  S(["Start"]):::start
+  GPS{"Munition is<br/>GPS-guided?"}:::decision
+  T1V{"JTAC has visual on<br/>BOTH target AND aircraft?"}:::decision
+  CIV{"Civilians<br/>within 500 m?"}:::decision
+  DC{"Friendlies<br/>within 600 m?"}:::decision
+  MULTI{"Multiple targets in<br/>single engagement window?"}:::decision
+  AUTH{"Supported commander<br/>authorized Type 3?"}:::decision
+  DEG{"Night / weather /<br/>high standoff?"}:::decision
+
+  T1["TYPE 1<br/>Cleared Hot per attack<br/>Method: BOT"]:::green
+  T2["TYPE 2 (DEFAULT)<br/>Cleared Hot per attack<br/>Method: BOC<br/>FAH required in remarks"]:::blue
+  T3["TYPE 3<br/>Cleared To Engage<br/>Method: BOC<br/>Time window + geo boundary<br/>+ FAH + target set required"]:::yellow
+
+  S --> GPS
+  GPS -->|YES| T1BLOCK["Type 1 BLOCKED<br/>(JP 3-09.3 III-43 note)"]:::red
+  GPS -->|NO| T1V
+  T1BLOCK --> MULTI
+  T1V -->|NO| T2
+  T1V -->|YES| CIV
+  CIV -->|YES| T1
+  CIV -->|NO| DC
+  DC -->|YES| T1
+  DC -->|NO| MULTI
+  MULTI -->|YES| AUTH
+  MULTI -->|NO| DEG
+  AUTH -->|YES| T3
+  AUTH -->|NO| DEG
+  DEG -->|YES| T2
+  DEG -->|NO| T2
+
+  classDef start fill:#e2e8f0,stroke:#475569,color:#1e293b;
+  classDef decision fill:#e0e7ff,stroke:#3730a3,color:#1e1b4b;
+  classDef green fill:#dcfce7,stroke:#15803d,color:#14532d;
+  classDef blue fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a;
+  classDef yellow fill:#fef9c3,stroke:#a16207,color:#713f12;
+  classDef red fill:#fee2e2,stroke:#b91c1c,color:#7f1d1d;
+  </div>
+
+  <div class="callout callout-blue mt-4">
+    <div class="font-bold mb-1">Key facts</div>
+    <ul class="text-sm list-disc list-inside space-y-1">
+      <li><strong>Type 1 is doctrinally prohibited for GPS-guided weapons</strong> (JDAMs). When the munition tree picks a JDAM, control type must be Type 2.</li>
+      <li><strong>Type 1 requires the JTAC to have visual on BOTH target AND aircraft.</strong> With drone-as-sole-sensor, Type 1 is rare.</li>
+      <li><strong>Type 2 is the canonical default</strong> when the drone is the JTAC's only target sight (JP 3-09.3 III-45).</li>
+      <li><strong>Type 3 ("Cleared to Engage")</strong> needs explicit authority from the supported commander and an explicit attack envelope: time window, geographic boundary, FAH, target set.</li>
+    </ul>
+    <div class="citation">Source: JP 3-09.3 III-42 to III-46; ATP 3-09.30 &para;4-35</div>
+  </div>
+</section>
+
+<!-- ================ TREE 4 ================ -->
+<section id="tree4" class="page-break">
+  <h2 class="text-2xl font-bold border-b-2 border-slate-900 pb-2 mb-1">Tree 4 &mdash; Mark method</h2>
+  <p class="text-gray-700 mb-4 max-w-3xl"><strong>Purpose:</strong> How will the pilot find the target? Populates Line 7 of the 9-line. Always plan a backup mark.</p>
+
+  <div class="mermaid">
+flowchart TD
+  S(["Start"]):::start
+  BOC{"Method of attack:<br/>BOT or BOC?"}:::decision
+  LASE_NEEDED{"Munition is<br/>laser-guided?"}:::decision
+  TIME{"Time of day?"}:::decision
+  NVG{"Aircrew NVG-capable<br/>+ JTAC has IR pointer<br/>+ enemy lacks NVG?"}:::decision
+  DRONE_LASE{"Drone laser designator<br/>+ aircraft LST capable?"}:::decision
+  SMOKE{"JTAC has smoke<br/>+ wind acceptable<br/>+ not dense urban?"}:::decision
+  VDL{"VDL/ROVER<br/>available?"}:::decision
+
+  M_NONE["Line 7 = 'no mark'<br/>(BOC, weapon goes to coords)"]:::blue
+  M_LASE["Line 7 = '&lt;callsign&gt; laser, code &lt;PRF&gt;'<br/>+ LTL azimuth + FAH cone"]:::green
+  M_IR["PRIMARY: IR pointer (SPARKLE)<br/>BACKUP: laser or talk-on<br/>Friendly mark: IR strobe (PULSE)"]:::green
+  M_DRONE_LASE["PRIMARY: drone laser<br/>+ LTL + FAH<br/>BACKUP: IR pointer"]:::green
+  M_SMOKE["PRIMARY: smoke (color per SPINS)<br/>within 100 m of target<br/>BACKUP: talk-on"]:::green
+  M_VDL["PRIMARY: VDL talk-on<br/>(drone feed shared with aircraft)<br/>BACKUP: smoke"]:::green
+  M_TALK["PRIMARY: talk-on from CRP<br/>(1/4 to 4 unit-of-measure rule,<br/>cardinal directions only)<br/>BACKUP: VS-17 panel"]:::yellow
+
+  S --> BOC
+  BOC -->|BOC| LASE_NEEDED
+  LASE_NEEDED -->|YES| M_LASE
+  LASE_NEEDED -->|NO| M_NONE
+  BOC -->|BOT| TIME
+  TIME -->|night| NVG
+  NVG -->|YES| M_IR
+  NVG -->|NO| DRONE_LASE
+  DRONE_LASE -->|YES| M_DRONE_LASE
+  DRONE_LASE -->|NO| M_TALK
+  TIME -->|day| LASE_NEEDED2{"Munition<br/>laser-guided?"}:::decision
+  LASE_NEEDED2 -->|YES| M_LASE
+  LASE_NEEDED2 -->|NO| SMOKE
+  SMOKE -->|YES| M_SMOKE
+  SMOKE -->|NO| VDL
+  VDL -->|YES| M_VDL
+  VDL -->|NO| M_TALK
+
+  classDef start fill:#e2e8f0,stroke:#475569,color:#1e293b;
+  classDef decision fill:#e0e7ff,stroke:#3730a3,color:#1e1b4b;
+  classDef green fill:#dcfce7,stroke:#15803d,color:#14532d;
+  classDef blue fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a;
+  classDef yellow fill:#fef9c3,stroke:#a16207,color:#713f12;
+  </div>
+
+  <div class="callout callout-yellow mt-4">
+    <div class="font-bold mb-1">Key facts</div>
+    <ul class="text-sm list-disc list-inside space-y-1">
+      <li><strong>IR pointers MARK, they don't GUIDE.</strong> "Unlike LASER designators, IR pointers cannot be used to guide or improve the accuracy of aircraft ordnance" (JFO ATTP &para;1-65).</li>
+      <li><strong>Whenever laser is in use, the system passes Laser-to-Target Line (LTL) and Final Attack Heading (FAH) cone in remarks.</strong> FAH cone = LTL+10&deg; to LTL+60&deg; clockwise (10&deg; safety zone, 60&deg; outer acquisition basket).</li>
+      <li><strong>Always plan a redundant mark.</strong> Preferred combos: laser+smoke, IR pointer+IR strobe, smoke+talk-on.</li>
+      <li><strong>Talk-on uses cardinal/sub-cardinal directions only</strong> &mdash; never clock positions (no shared reference frame between JTAC and aircrew).</li>
+    </ul>
+    <div class="citation">Source: JP 3-09.3 III-77 to III-81; JFO ATTP &para;1-63 to &para;1-158</div>
+  </div>
+</section>
+
+<!-- ================ TREE 5 ================ -->
+<section id="tree5">
+  <h2 class="text-2xl font-bold border-b-2 border-slate-900 pb-2 mb-1">Tree 5 &mdash; IP / egress geometry</h2>
+  <p class="text-gray-700 mb-4 max-w-3xl"><strong>Purpose:</strong> Choose the best Initial Point and egress direction. Pure geometry, not a tree &mdash; implemented as a scoring function over pre-loaded named IPs.</p>
+
+  <div class="callout callout-gray">
+    <div class="font-bold mb-1">Scoring function (sketch)</div>
+    <ul class="text-sm list-disc list-inside space-y-1">
+      <li><strong>Penalty</strong>: run-in flies over friendlies, intersects active threat ring (MEZ), or violates airspace measure.</li>
+      <li><strong>Bonus</strong>: terrain masking on the run-in, pilot familiarity (named IP in fragged ATO), egress away from threats and toward FARP/recovery.</li>
+      <li><strong>Note</strong>: Lines 1&ndash;3 (IP, heading, distance from IP) describe the aircraft route. The JTAC controlling the strike picks those from their pre-loaded named IPs &mdash; <strong>our system outputs Lines 4&ndash;9 + Remarks</strong> and recommends an IP/egress to the JTAC.</li>
+    </ul>
+    <div class="citation">Source: JP 3-09.3 V-9 (9-line format); JSEAD 2015</div>
+  </div>
+</section>
+
+<!-- ================ TREE 6 ================ -->
+<section id="tree6" class="page-break">
+  <h2 class="text-2xl font-bold border-b-2 border-slate-900 pb-2 mb-1">Tree 6 &mdash; Restrictions</h2>
+  <p class="text-gray-700 mb-4 max-w-3xl"><strong>Purpose:</strong> A flat list of conditional flags that fire independently. Each becomes a line in the 9-line remarks. Restrictions in 9-line are MANDATORY READBACK.</p>
+
+  <div class="mermaid">
+flowchart LR
+  IN["Inputs:<br/>munition, friendlies, threats,<br/>weather, mark method,<br/>control type, environment"]:::start
+
+  subgraph CHECKS["Independent flag nodes"]
+    direction TB
+    R1["DANGER CLOSE<br/>friendly &le; RED &rarr; GFC initials"]:::red
+    R2["FAH from laser<br/>LTL+10 to LTL+60 clockwise"]:::yellow
+    R3["FAH friendly safety<br/>parallel to friendly axis &plusmn;30&deg;"]:::yellow
+    R4["FAH collateral avoidance<br/>away from Cat II site"]:::yellow
+    R5["LTL azimuth in remarks"]:::blue
+    R6["Surface-to-air threat<br/>type / bearing / suppression"]:::yellow
+    R7["MANPADS floor"]:::yellow
+    R8["Friendly artillery GTL<br/>deconfliction"]:::yellow
+    R9["Other aircraft on station<br/>callsigns + altitudes"]:::blue
+    R10["TLE high &rarr; recommend laser"]:::yellow
+    R11["Moving target<br/>speed / heading / time stamp"]:::blue
+    R12["CDE elevated<br/>Cat II in danger circle"]:::yellow
+    R13["DUAL-USE &rarr; Level 5 escalation<br/>(SecDef/POTUS unless delegated)"]:::red
+    R14["Recent civcas in area<br/>extra caution"]:::yellow
+    R15["Urban: prefer delay fuze + small frag<br/>FAH parallel to/away from civilian district"]:::yellow
+    R16["NVD capable y/n + IR strobe"]:::blue
+    R17["TOT (push / immediate / scheduled)<br/>ALWAYS LAST"]:::green
+  end
+
+  OUT["REMARKS<br/>+ RESTRICTIONS<br/>(ordered per JP 3-09.3 V-30)"]:::green
+
+  IN --> CHECKS --> OUT
+
+  classDef start fill:#e2e8f0,stroke:#475569,color:#1e293b;
+  classDef green fill:#dcfce7,stroke:#15803d,color:#14532d;
+  classDef yellow fill:#fef9c3,stroke:#a16207,color:#713f12;
+  classDef red fill:#fee2e2,stroke:#b91c1c,color:#7f1d1d;
+  classDef blue fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a;
+  </div>
+
+  <div class="callout callout-yellow mt-4">
+    <div class="font-bold mb-1">Key facts</div>
+    <ul class="text-sm list-disc list-inside space-y-1">
+      <li><strong>Restrictions = mandatory readback.</strong> Aircrew must repeat them back verbatim before clearance is given.</li>
+      <li><strong>TOT (Time On Target) is always last</strong> &mdash; it marks the end of the brief and tells the pilot whether to push, go immediate, or wait for a scheduled window.</li>
+      <li><strong>Output ordering follows JP 3-09.3 V-30</strong>: laser-to-target line, ordnance, threats, friendly fires, additional radio calls, hazards/weather/TLE/NVD, post-launch abort, danger close, ACAs, FAH, lateral/altitude separation, approval out of BP, TOT.</li>
+    </ul>
+    <div class="citation">Source: JP 3-09.3 V-30 to V-33</div>
+  </div>
+</section>
+
+<!-- ================ SAMPLE 9-LINE ================ -->
+<section id="sample" class="page-break">
+  <h2 class="text-2xl font-bold border-b-2 border-slate-900 pb-2 mb-4">Sample output &mdash; Scenario S01</h2>
+  <p class="text-gray-700 mb-4 max-w-3xl">Single technical with mounted DShK, open terrain, friendlies dug in 800 m southwest, A-10 on station with GBU-12 x4 and AGM-65D x2, weather clear, day. This is what the system produces for the JTAC to review.</p>
+
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="bg-white border-2 border-slate-300 rounded-lg p-5 shadow-sm">
+      <div class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Top Recommendation &middot; Tree confidence 0.91</div>
+      <div class="grid grid-cols-3 gap-2 mb-4 text-sm">
+        <div><div class="text-xs text-gray-500">Munition</div><div class="font-bold">GBU-12</div></div>
+        <div><div class="text-xs text-gray-500">Control</div><div class="font-bold">Type 2</div></div>
+        <div><div class="text-xs text-gray-500">Method</div><div class="font-bold">BOT</div></div>
+      </div>
+      <div class="border-t pt-3">
+        <div class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">9-Line (Lines 4-9)</div>
+        <div class="nine-line-row"><div class="nine-line-label">Line 4</div><div class="nine-line-value">Target elevation: 312 ft MSL</div></div>
+        <div class="nine-line-row"><div class="nine-line-label">Line 5</div><div class="nine-line-value">Target description: 1x technical with mounted DShK, stationary</div></div>
+        <div class="nine-line-row"><div class="nine-line-label">Line 6</div><div class="nine-line-value">Target location: 38SMB12345678 (WGS-84)</div></div>
+        <div class="nine-line-row"><div class="nine-line-label">Line 7</div><div class="nine-line-value">Mark: laser, code 1688</div></div>
+        <div class="nine-line-row"><div class="nine-line-label">Line 8</div><div class="nine-line-value">Friendlies: SW 800 m, dug in, axis 045</div></div>
+        <div class="nine-line-row"><div class="nine-line-label">Line 9</div><div class="nine-line-value">Egress: north</div></div>
+      </div>
+      <div class="border-t pt-3 mt-3">
+        <div class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Remarks &amp; restrictions</div>
+        <ul class="text-sm font-mono space-y-1">
+          <li>&bull; LTL 045M magnetic</li>
+          <li>&bull; FAH 055-105 clockwise</li>
+          <li>&bull; TOT push when ready</li>
+        </ul>
+      </div>
+      <div class="border-t pt-3 mt-3">
+        <div class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Reasoning trace</div>
+        <ul class="text-xs space-y-1 text-gray-700">
+          <li>&bull; <strong>engageability</strong>: PASSED &mdash; multi-source PID (CNN 0.93 + 120s sustained track), no NSL match, ROE category approved (combatant_vehicle)</li>
+          <li>&bull; <strong>munition</strong>: GBU-12 ranked first &mdash; PREFERRED vs soft stationary vehicle (effectiveness 1.0); friendly distance 800 m &raquo; danger close 275 m; no protected sites in CHA</li>
+          <li>&bull; <strong>control_type</strong>: Type 2 &mdash; drone is sole sensor, JTAC remote (no visual on aircraft or target)</li>
+          <li>&bull; <strong>mark</strong>: laser designation &mdash; munition is laser-guided, day, ceiling 12000 ft &gt; 5000 ft</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="space-y-3">
+      <div class="bg-white border border-slate-300 rounded-lg p-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="text-xs uppercase text-slate-500">Alternative #2</div>
+            <div class="font-bold">AGM-65D Maverick</div>
+          </div>
+          <div class="text-sm text-gray-600">Effectiveness 0.7 (ACCEPTABLE)</div>
+        </div>
+        <div class="text-sm text-gray-700 mt-1">IIR seeker autonomous after launch; preferred if weather degrades laser line-of-sight.</div>
+      </div>
+      <div class="bg-white border border-slate-300 rounded-lg p-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="text-xs uppercase text-slate-500">Alternative #3</div>
+            <div class="font-bold">GAU-8 30mm strafe</div>
+          </div>
+          <div class="text-sm text-gray-600">Effectiveness 0.4 (MARGINAL)</div>
+        </div>
+        <div class="text-sm text-gray-700 mt-1">Last-resort soft target option; A-10 has 1100 rounds. Lower PK against vehicle hardness; preserves loadout for harder follow-on targets.</div>
+      </div>
+
+      <div class="callout callout-blue">
+        <div class="font-bold mb-1">Approval flow for this brief</div>
+        <ol class="text-sm list-decimal list-inside space-y-1">
+          <li>System produces draft (above) with confidence 0.91</li>
+          <li><strong>JTAC (Collen)</strong> reviews on tablet, can Confirm / Alter / Deny</li>
+          <li><strong>GFC</strong> approves &mdash; not danger close, no initials needed</li>
+          <li>JTAC reads 9-line on radio to A-10 pilot</li>
+          <li>Aircraft inbound, "TEN SECONDS" / "LASER ON" sequence, "CLEARED HOT"</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================ GLOSSARY ================ -->
+<section id="glossary" class="page-break">
+  <h2 class="text-2xl font-bold border-b-2 border-slate-900 pb-2 mb-4">Glossary</h2>
+  <p class="text-gray-700 mb-4 max-w-3xl">Every acronym used in the diagrams above. A non-JTAC viewer should never have to leave this page.</p>
+
+  <div class="grid md:grid-cols-2 gap-x-8 gap-y-1">
+    <dl class="glossary-grid">
+      <dt>9-line</dt><dd>The standardized 9-line briefing format a JTAC reads to attack aircraft. The system's primary output.</dd>
+      <dt>AGM-114</dt><dd>Hellfire missile. Fired from helicopters and drones; laser-guided variants most common. RED 110-130 m.</dd>
+      <dt>AGM-65</dt><dd>Maverick missile. IIR-seeker variants are autonomous after launch; preferred for movers.</dd>
+      <dt>BOC / BOT</dt><dd>Bomb on Coordinate / Bomb on Target. Weapon aimed at GPS coords vs at the target the aircraft sees.</dd>
+      <dt>CAS</dt><dd>Close Air Support &mdash; aircraft attacking enemies near friendly troops. The whole problem we're solving.</dd>
+      <dt>CAT I/II/III</dt><dd>Target Location Error categories. CAT I &lt; ~10 m (GPS-bomb-grade). CAT III ~30 m (drone alone).</dd>
+      <dt>CBR</dt><dd>Chemical, Biological, Radiological &mdash; hazards that escalate CDE to Level 5.</dd>
+      <dt>CDE</dt><dd>Collateral Damage Estimation. 5-level escalation methodology for predicting civilian harm.</dd>
+      <dt>CER</dt><dd>Collateral Effects Radius. The danger circle radius for a planned strike.</dd>
+      <dt>CHA</dt><dd>Collateral Hazard Area. The danger circle around a planned strike.</dd>
+      <dt>CJCSI</dt><dd>Chairman of the Joint Chiefs of Staff Instruction. Authoritative DoD-level guidance.</dd>
+      <dt>CNN</dt><dd>Convolutional Neural Network &mdash; the drone's onboard target classifier.</dd>
+      <dt>Cleared Hot</dt><dd>"Drop the weapon now." Type 1 / Type 2.</dd>
+      <dt>Cleared To Engage</dt><dd>Multi-attack version of Cleared Hot. Type 3 only.</dd>
+      <dt>CRP</dt><dd>Common Reference Point &mdash; landmark both JTAC and aircrew can identify.</dd>
+      <dt>Danger Close</dt><dd>Friendlies inside the weapon's RED standing distance. Adds GFC-initials procedure; doesn't prohibit.</dd>
+      <dt>DShK</dt><dd>Soviet 12.7 mm heavy machine gun. Common technical-mounted weapon.</dd>
+      <dt>FAC(A)</dt><dd>Forward Air Controller (Airborne) &mdash; pilot qualified to do JTAC's job from the air.</dd>
+      <dt>FAH</dt><dd>Final Attack Heading &mdash; magnetic heading the aircraft must be on when releasing the weapon.</dd>
+      <dt>FARP</dt><dd>Forward Arming and Refueling Point. Where helicopters/aircraft return between sorties.</dd>
+      <dt>FMV</dt><dd>Full-Motion Video &mdash; what the drone produces.</dd>
+      <dt>GBU-12</dt><dd>500 lb laser-guided bomb (Paveway II). The CAS workhorse. RED 275 m.</dd>
+      <dt>GBU-31/32/38</dt><dd>JDAM family. GPS-guided bombs (2000/1000/500 lb). Need CAT I coordinates.</dd>
+      <dt>GBU-39</dt><dd>Small Diameter Bomb (250 lb GPS-guided). Smaller frag, used near civilians. RED 205 m.</dd>
+      <dt>GFC</dt><dd>Ground Force Commander &mdash; senior on-scene commander; final approver above the JTAC.</dd>
+      <dt>GPS</dt><dd>Global Positioning System &mdash; satellite-based location. Drives JDAM guidance.</dd>
+      <dt>GTL</dt><dd>Gun-Target Line &mdash; the imaginary line from a friendly artillery piece to its target. Aircraft must deconflict.</dd>
+    </dl>
+
+    <dl class="glossary-grid">
+      <dt>IIR</dt><dd>Imaging Infrared &mdash; a thermal seeker (used by Maverick). Autonomous after launch.</dd>
+      <dt>IP</dt><dd>Initial Point &mdash; named geographic point the aircraft flies from toward the target. Line 1.</dd>
+      <dt>IR pointer</dt><dd>Infrared laser pointer &mdash; visible only through NVGs. Marks targets at night. Cannot guide weapons.</dd>
+      <dt>JDAM</dt><dd>Joint Direct Attack Munition &mdash; GPS-guided bomb (GBU-31/32/38).</dd>
+      <dt>JFIRE</dt><dd>Multi-service pocket reference. Source of RED tables 81-87.</dd>
+      <dt>JFO</dt><dd>Joint Fires Observer &mdash; less-certified observer who feeds targeting data. Doctrinally, our drone+system is closest to a JFO.</dd>
+      <dt>JP 3-09.3</dt><dd>Joint Publication on Close Air Support (2014). The bible. Most-cited document in our tree.</dd>
+      <dt>JTAC</dt><dd>Joint Terminal Attack Controller &mdash; the certified ground operator who clears aircraft to drop bombs.</dd>
+      <dt>LGB / LGW</dt><dd>Laser-Guided Bomb / Weapon. Needs a laser spot on the target.</dd>
+      <dt>LST</dt><dd>Laser Spot Tracker &mdash; aircraft sensor that locks onto a laser spot.</dd>
+      <dt>LTL</dt><dd>Laser-to-Target Line &mdash; magnetic bearing from designator to target. Drives the FAH cone.</dd>
+      <dt>MANPADS</dt><dd>Man-Portable Air Defense System &mdash; shoulder-fired anti-aircraft missiles.</dd>
+      <dt>MEZ</dt><dd>Missile Engagement Zone &mdash; airspace dominated by enemy surface-to-air missiles.</dd>
+      <dt>MGRS</dt><dd>Military Grid Reference System &mdash; alphanumeric grid format for target location.</dd>
+      <dt>MSL / AGL</dt><dd>Mean Sea Level / Above Ground Level &mdash; altitude reference points.</dd>
+      <dt>NFA / RFA</dt><dd>No-Fire Area / Restricted Fire Area &mdash; airspace overlays that gate weapons release.</dd>
+      <dt>NSL</dt><dd>No-Strike List &mdash; protected sites (hospitals, schools, mosques). Hard block.</dd>
+      <dt>NVG / NVD</dt><dd>Night Vision Goggles / Device. IR pointers visible only through these.</dd>
+      <dt>PID</dt><dd>Positive Identification &mdash; reasonable certainty target is legitimate. Required before any engagement.</dd>
+      <dt>Pᵢ</dt><dd>Probability of incapacitation. RED is published at 0.1% Pᵢ (1-in-1000 risk to a standing soldier).</dd>
+      <dt>PRF</dt><dd>Pulse Repetition Frequency &mdash; the unique blink pattern of a laser. 4-digit code (e.g., 1688).</dd>
+      <dt>PSS-SOF</dt><dd>Precision Strike Suite &mdash; mensuration tool that produces CAT I coordinates.</dd>
+      <dt>RED</dt><dd>Risk Estimate Distance &mdash; how far friendlies should be from impact, by weapon type. Drives danger-close threshold.</dd>
+      <dt>ROE</dt><dd>Rules of Engagement &mdash; legal/policy rules for using force. Theater-specific.</dd>
+      <dt>ROVER / VDL</dt><dd>Video Downlink &mdash; JTAC's tablet that shows drone or aircraft sensor feed.</dd>
+      <dt>SCAR</dt><dd>Strike Coordination And Reconnaissance &mdash; finding targets and directing strikes (no friendlies nearby).</dd>
+      <dt>SEAD</dt><dd>Suppression of Enemy Air Defenses &mdash; pre-strike clearing of threats.</dd>
+      <dt>SecDef</dt><dd>Secretary of Defense. Approval level for CDE Level 5 strikes unless delegated.</dd>
+      <dt>SIGINT</dt><dd>Signals Intelligence &mdash; radio intercepts, RF emission detection. Corroborates PID.</dd>
+      <dt>SPARKLE</dt><dd>Brevity word: "I am marking the target with my IR pointer."</dd>
+      <dt>SPINS</dt><dd>Special Instructions &mdash; daily theater-specific orders that override defaults.</dd>
+      <dt>TLE</dt><dd>Target Location Error &mdash; how accurately we know target position (90% confidence radius).</dd>
+      <dt>TOT / TTT</dt><dd>Time On Target / Time To Target. Always last item in 9-line remarks.</dd>
+      <dt>VS-17 panel</dt><dd>Bright orange/pink fabric panel friendlies put down to mark themselves visually.</dd>
+      <dt>WGS-84</dt><dd>Standard global GPS coordinate datum used by US military.</dd>
+    </dl>
+  </div>
+</section>
+
+<!-- ================ DOCTRINAL FOOTER ================ -->
+<footer class="border-t-2 border-slate-900 pt-6 mt-12 text-sm text-gray-600">
+  <div class="font-bold text-slate-800 mb-2">Doctrinal foundations</div>
+  <ul class="list-disc list-inside space-y-1">
+    <li><strong>JP 3-09.3 (2014)</strong> &mdash; Close Air Support. 9-line format, Type 1/2/3 control, danger close, marking. Most-cited.</li>
+    <li><strong>JFO ATTP &para;1-3, 1-9, 1-63 to 1-158</strong> &mdash; Joint Fires Observer authorities, marking, laser geometry. Defines our drone's doctrinal role.</li>
+    <li><strong>JFIRE (2016) Tables 81-87</strong> &mdash; Risk Estimate Distance numbers (danger close).</li>
+    <li><strong>CJCSI 3160.01</strong> &mdash; No-strike list (Cat I / Cat II), 5-level CDE methodology, PID definition, self-defense framing.</li>
+    <li><strong>AFTTP 3-3.JTAC (2012)</strong> &mdash; Target taxonomy, weapon-target matching, target effectiveness matrix.</li>
+    <li><strong>ATP 3-09.30</strong> &mdash; Observed fire procedures, danger-close trigger for indirect fires.</li>
+    <li><strong>Kill Box (2014); JP 3-52</strong> &mdash; Airspace control measures gating weapons release.</li>
+  </ul>
+  <div class="mt-4 text-xs">Generated for Collen (JTAC subject-matter expert) and hackathon judges. Single-file artifact: open in any browser, no server required.</div>
+</footer>
+
+</main>
+
+<!-- ================ MERMAID INIT ================ -->
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      fontSize: '13px',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      primaryColor: '#f1f5f9',
+      primaryTextColor: '#0f172a',
+      primaryBorderColor: '#475569',
+      lineColor: '#475569',
+      secondaryColor: '#e0e7ff',
+      tertiaryColor: '#fafafa'
+    },
+    flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' }
+  });
+</script>
+
+</body>
+</html>
