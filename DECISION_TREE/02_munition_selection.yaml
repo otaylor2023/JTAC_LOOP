@@ -20,10 +20,43 @@ inputs:
 
 stages:
 
-  # ────────────────────────────────────────────────────────────────────────
+  # ════════════════════════════════════════════════════════════════════════
+  # STAGE 0 — MOVEMENT GATE (Collen's primary rule, CF-1.3, 2026-05-02)
+  # ════════════════════════════════════════════════════════════════════════
+  # Collen's exact words:
+  #   "for ammunition selection, if the target is moving or movable, use laser.
+  #    If it's stationary and not movable, use coordinate-based JDAM or GPS"
+  #
+  # This is THE JTAC's actual mental model. We hoist it above the matrix:
+  # pick the GUIDANCE FAMILY first, then let the matrix tiebreak within it.
+  # The matrix still drives final selection; this gate just biases the rank.
+  # ════════════════════════════════════════════════════════════════════════
+  movement_gate:
+
+    - id: target_movement_to_guidance_class
+      plain_language: "If target is moving or movable → prefer laser. If stationary and not movable → prefer GPS-coordinate."
+      rule: |
+        if target_movement_state in [slow, fast] OR target_is_movable == true:
+          PRIMARY_GUIDANCE_BIAS = laser
+          # laser includes: pure laser (GBU-12, GBU-16, AGM-114K/N/R, AGM-65L, APKWS),
+          #                 GPS+laser hybrid (GBU-54 LJDAM),
+          #                 IIR autonomous seeker (AGM-65D/G/H — pilot acquires moving target)
+          PRIMARY_GUIDANCE_FAMILIES = [laser, gps_laser, iir]
+          DEPRIORITIZE: pure_gps  # JDAM family struggles on movers
+        else (target_movement_state == stationary AND target_is_movable == false):
+          PRIMARY_GUIDANCE_BIAS = coordinate
+          PRIMARY_GUIDANCE_FAMILIES = [gps, gps_laser]  # JDAM, LJDAM, SDB
+          ACCEPT_AS_FALLBACK: laser  # if no GPS option available or weather defeats GPS
+      effect_on_rank: |
+        Stage 2C ranking adds a +0.20 score boost to munitions whose guidance is in
+        PRIMARY_GUIDANCE_FAMILIES. This DOES NOT eliminate other families — they remain
+        viable, just lower-ranked. Collen's rule is a strong preference, not an absolute.
+      citation: "Collen feedback CF-1.3 (2026-05-02); doctrinal support AFTTP 6.3.4 (LGB drops to MARGINAL on movers)"
+
+  # ════════════════════════════════════════════════════════════════════════
   # STAGE 2A — HARD FILTER (deterministic gates)
   # For each munition in aircraft.loadout, run the filters.
-  # ────────────────────────────────────────────────────────────────────────
+  # ════════════════════════════════════════════════════════════════════════
   hard_filter:
 
     - id: tle_compatibility
@@ -41,8 +74,10 @@ stages:
       rule: |
         For each munition m:
           if target_class not in m.target_classes_doctrinally_effective_against
-          AND target_class not in target_effectiveness_matrix[m.class][rating: ACCEPTABLE or PREFERRED]:
+          AND target_class not in target_effectiveness_matrix[m.effectiveness_class][rating: ACCEPTABLE or PREFERRED]:
             ELIMINATE m
+        # Note: matrix lookup uses m.effectiveness_class (the bucket key in target_effectiveness_matrix.yaml),
+        # NOT m.class (which is the broad family). e.g., GBU-12.class=bomb_lgb but effectiveness_class=bomb_lgb_500.
       citation: "AFTTP 3-3.JTAC §6.4; target_effectiveness_matrix.yaml"
 
     - id: weather_supports_guidance
@@ -74,10 +109,24 @@ stages:
           for each protected_site p in CDE_radius:
             if p.category == "Cat I" (hospital, school, mosque, etc.)
             AND distance(target, p) <= m.red_standing_m:
-              ELIMINATE m  # Cat I protected sites cannot be inside RED
+              if NOT inputs.self_defense_active:
+                ELIMINATE m  # Cat I protected sites cannot be inside RED under normal ROE
+              else:
+                # Self-defense override path. Per CJCSI 3160.01 p.C-B-4, troops in contact taking
+                # hostile fire from a traditional No-Strike entity may engage. The munition is NOT
+                # eliminated, but it carries an elevated-approval flag (above GFC).
+                FLAG m as "CAT_I_INSIDE_RED_SELF_DEFENSE"
+                REQUIRE: elevated_approval (above GFC)
             elif p.category == "Cat II" AND distance(target, p) <= m.red_standing_m:
               FLAG m as "CDE_ELEVATED — Cat II protected within RED"
-      citation: "CJCSI 3160.01 Encl B; CDE Level 1 cascade"
+      citation: "CJCSI 3160.01 Encl B p.C-B-4; CDE Level 1 cascade"
+
+    - id: cde_level_3_cluster_block
+      plain_language: "Cluster munitions are not supported by CDE methodology at Level 3 or above (regardless of ROE)."
+      rule: |
+        if m.class == "cluster" AND any_collateral_concern_in_cer:
+          ELIMINATE m
+      citation: "CJCSI 3160.01 p.D-A-22"
 
     - id: roe_munition_block
       plain_language: "Does the current ROE prohibit this weapon class?"
@@ -145,6 +194,16 @@ stages:
         MARGINAL: 0.4
         NOT_REC: 0.0
         PROHIBITED: -1.0  # eliminated already, defensive
+
+    # Stage 0 movement gate boost — Collen's primary rule CF-1.3
+    movement_gate_bonus:
+      description: |
+        Apply a guidance-family preference bonus from Stage 0 movement gate.
+        Movement = moving/movable → laser/IIR get +0.20.
+        Movement = stationary+not_movable → GPS-coordinate gets +0.20.
+      apply: "if m.guidance in stage_0.PRIMARY_GUIDANCE_FAMILIES: score += 0.20"
+      citation: "Collen feedback CF-1.3 (2026-05-02)"
+
     tiebreakers_in_order:
       - 1_friendly_safety_margin:
           score: "(friendly_distance_m - red_standing_m) / red_standing_m"
@@ -152,7 +211,7 @@ stages:
       - 2_collateral_minimization:
           score: "-red_standing_m"
           direction: maximize
-          weight_when: "any cat_ii_protected_in_red"
+          weight_when: "any cat_ii_protected_in_red OR any nsl_cat_i_in_red"
       - 3_loadout_depth:
           score: "aircraft.loadout[m.id].count"
           direction: maximize

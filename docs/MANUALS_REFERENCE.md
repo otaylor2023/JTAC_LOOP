@@ -24,7 +24,7 @@ This folder is the doctrinal foundation for our deterministic CAS decision tree.
 | **WGS-84** | The standard global GPS coordinate datum used by US military | Always confirm coords are in this datum |
 | **TLE** | Target Location Error — how accurately we know where the target is, expressed as a 90% confidence circle radius | Drives which weapons can be used |
 | **CEP** | Circular Error Probable — radius inside which 50% of weapons land. Used for weapon accuracy | Compared against TLE |
-| **CAT I / II / III** | TLE quality categories. CAT I (~<6–10 m) is GPS-bomb-grade. CAT III (~30 m) is typical of an airborne sensor pod | Drone alone usually produces CAT III |
+| **CAT I / II / III** | TLE quality categories. CAT I (≤6 m, JDAM-grade per ATP 3-09.30 ¶3-61) is GPS-bomb-grade. CAT III (~30 m) is typical of an airborne sensor pod | Drone alone usually produces CAT III |
 | **PID** | Positive Identification — "reasonable certainty that this is a legitimate military target" | Required before any engagement |
 | **CID** | Combat Identification — confirming target type just before firing | Done at "engage" step |
 | **ROE** | Rules of Engagement — the legal/policy rules for when and how to use force | Theater-specific, varies by mission |

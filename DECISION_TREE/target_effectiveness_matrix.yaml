@@ -22,17 +22,19 @@
 # ─── COLUMN HEADERS (munition classes) ────────────────────────────────────
 # bomb_lgb_500     = GBU-12 family (laser, 500 lb)
 # bomb_lgb_2000    = GBU-10/16 family (laser, 1000-2000 lb)
-# bomb_jdam_500    = GBU-38, GBU-54 (GPS, 500 lb)
+# bomb_jdam_500    = GBU-38 (GPS, 500 lb)
+# bomb_jdam_500_laser = GBU-54 LJDAM (GPS+laser hybrid, 500 lb) — preferred for movers
 # bomb_jdam_2000   = GBU-31, GBU-32 (GPS, 1000-2000 lb)
 # bomb_jdam_pen    = GBU-31(V)3 BLU-109 (penetrator)
 # bomb_sdb         = GBU-39 (250 lb)
 # bomb_sdb_flm     = GBU-39 FLM (focused lethality)
 # bomb_unguided    = Mk-82/83/84
-# missile_atgm_l   = AGM-114 K/N/R Hellfire (laser)
-# missile_iir      = AGM-65 D/G/H Maverick (IR)
+# bomb_cluster     = CBU-87 (PROHIBITED for everything except dispersed armor / personnel)
+# missile_atgm_l   = AGM-114 K/R Hellfire, AGM-65L Maverick (laser)
+# missile_iir      = AGM-65 D/G Maverick (IR)
 # rocket_apkws     = APKWS laser-guided 70 mm
 # rocket_unguided  = 70mm Hydra unguided
-# gun_30mm         = GAU-8 (A-10) and similar
+# gun_30mm         = GAU-8 (A-10) and AC-130 105 mm (grouped)
 # gun_20mm         = M61 internal
 # missile_thermo   = AGM-114N thermobaric
 
@@ -44,9 +46,11 @@ target_classes:
     recommendations:
       bomb_lgb_500:    ACCEPTABLE
       bomb_jdam_500:   ACCEPTABLE
+      bomb_jdam_500_laser: ACCEPTABLE
       bomb_sdb:        PREFERRED   # smaller frag, sufficient effect on soft target
       bomb_sdb_flm:    PREFERRED
       bomb_unguided:   MARGINAL    # only if no civilians/friendlies near
+      bomb_cluster:    PROHIBITED
       missile_atgm_l:  ACCEPTABLE
       rocket_apkws:    PREFERRED
       rocket_unguided: ACCEPTABLE
@@ -60,6 +64,7 @@ target_classes:
     recommendations:
       bomb_lgb_500:    PREFERRED
       bomb_jdam_500:   PREFERRED
+      bomb_jdam_500_laser: PREFERRED
       bomb_sdb:        PREFERRED
       bomb_sdb_flm:    PREFERRED
       missile_atgm_l:  ACCEPTABLE
@@ -67,15 +72,26 @@ target_classes:
       rocket_apkws:    ACCEPTABLE
       gun_30mm:        ACCEPTABLE
       bomb_unguided:   MARGINAL
+      bomb_cluster:    PROHIBITED
 
   personnel_dug_in:
     description: "Infantry in fighting positions, fox holes, dug-in trenches"
     recommendations:
       bomb_lgb_500:    ACCEPTABLE  # contact fuze less effective vs dug-in
       bomb_jdam_500:   PREFERRED   # airburst over the position
+      bomb_jdam_500_laser: PREFERRED
       bomb_sdb:        ACCEPTABLE
       missile_atgm_l:  MARGINAL
       missile_iir:     MARGINAL
+      gun_30mm:        ACCEPTABLE
+      bomb_cluster:    PROHIBITED
+
+  # Dispersed personnel — area target where cluster doctrine permits
+  personnel_dispersed:
+    description: "Dispersed dismounted formation across wide area (battalion-scale)"
+    recommendations:
+      bomb_cluster:    ACCEPTABLE  # only doctrinal use case for CBU-87 against personnel
+      bomb_unguided:   MARGINAL
       gun_30mm:        ACCEPTABLE
 
   personnel_in_cave_or_building:
@@ -93,6 +109,7 @@ target_classes:
     recommendations:
       bomb_lgb_500:    PREFERRED
       bomb_jdam_500:   PREFERRED
+      bomb_jdam_500_laser: PREFERRED
       bomb_sdb:        PREFERRED
       missile_atgm_l:  PREFERRED
       missile_iir:     PREFERRED
@@ -101,6 +118,7 @@ target_classes:
       gun_20mm:        ACCEPTABLE
       bomb_lgb_2000:   NOT_REC
       bomb_jdam_2000:  NOT_REC
+      bomb_cluster:    PROHIBITED
 
   vehicle_wheeled_soft_moving:
     description: "Soft-skin vehicle in motion (above walking pace)"
@@ -109,20 +127,23 @@ target_classes:
       missile_iir:     PREFERRED   # autonomous IIR seeker
       bomb_lgb_500:    MARGINAL    # laser harder on movers (AFTTP 6.3.4)
       bomb_jdam_500:   NOT_REC     # GPS-only fails on movers
-      gbu_54_LJDAM:    PREFERRED   # GPS+laser hybrid for movers
+      bomb_jdam_500_laser: PREFERRED   # GBU-54 LJDAM — GPS+laser hybrid for movers
       gun_30mm:        PREFERRED
       rocket_unguided: MARGINAL
+      bomb_cluster:    PROHIBITED
 
   vehicle_tracked_light:
     description: "BMP, BRDM, light APC, lightly armored tracked vehicle"
     recommendations:
       bomb_lgb_500:    PREFERRED
       bomb_jdam_500:   PREFERRED
+      bomb_jdam_500_laser: PREFERRED   # also viable against tracked-light movers
       missile_atgm_l:  PREFERRED
       missile_iir:     PREFERRED
       gun_30mm:        PREFERRED   # A-10 30mm penetrates light armor
       bomb_sdb:        ACCEPTABLE
       gun_20mm:        MARGINAL
+      bomb_cluster:    PROHIBITED
 
   vehicle_tracked_armor:
     description: "Main battle tank class (T-72 etc.), heavily armored tracked"
@@ -134,6 +155,15 @@ target_classes:
       bomb_jdam_2000:  PREFERRED   # direct hit lethal
       gun_30mm:        ACCEPTABLE  # GAU-8 from above can penetrate top armor
       bomb_sdb:        NOT_REC     # 250 lb insufficient
+      bomb_cluster:    PROHIBITED
+
+  # Dispersed armor — area target where cluster doctrine permits
+  vehicle_armor_dispersed:
+    description: "Dispersed armored formation across wide area"
+    recommendations:
+      bomb_cluster:    ACCEPTABLE  # only doctrinal use case for CBU-87 against armor
+      bomb_jdam_2000:  ACCEPTABLE
+      missile_atgm_l:  ACCEPTABLE
 
   vehicle_tracked_heavy_armor:
     description: "Modern MBT with reactive armor, hardened command vehicle"
@@ -150,12 +180,14 @@ target_classes:
     recommendations:
       bomb_lgb_500:    PREFERRED
       bomb_jdam_500:   PREFERRED
+      bomb_jdam_500_laser: PREFERRED
       bomb_sdb:        PREFERRED
       missile_thermo:  PREFERRED
       missile_atgm_l:  PREFERRED
       missile_iir:     PREFERRED
       bomb_unguided:   MARGINAL
       gun_30mm:        ACCEPTABLE
+      bomb_cluster:    PROHIBITED
 
   structure_hardened:
     description: "Reinforced concrete, multi-story commercial / industrial"

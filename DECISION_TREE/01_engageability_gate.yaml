@@ -29,13 +29,23 @@ nodes:
     type: predicate
     plain_language: "Are friendly forces taking effective fire from this target right now?"
     condition: friendlies_taking_effective_fire == true
+    inputs:
+      - friendlies_taking_effective_fire           # bool — required to fire this branch
+      - self_defense_from_protected_entity         # bool — true ONLY when friendlies are taking fire FROM a Cat I
+                                                   # protected entity per CJCSI 3160.01 p.C-B-4. Generic self-defense
+                                                   # does NOT bypass the Cat I block; this flag is what unlocks it.
     on_true:
       result: SELF_DEFENSE_OVERRIDE
       flag: "SELF DEFENSE — proportional response per LOW + Standing ROE"
-      bypass: ["nsl_check", "roe_target_category_check"]
+      bypass: ["nsl_check", "roe_target_category_check", "munition.protected_site_in_red"]
       preserve: ["pid_check", "airspace_check", "danger_close_check"]
+      propagate_to_munition_tree:
+        self_defense_active: true
+        requires_elevated_approval: true
+        bypass_protected_in_red: true              # only effective when self_defense_from_protected_entity == true
+                                                   # (see munition tree protected_site_in_red rule)
     on_false: { goto: pid_multisource_check }
-    citation: "CJCSI 3160.01 p.D-3; Standing ROE"
+    citation: "CJCSI 3160.01 p.D-3, p.C-B-4; Standing ROE"
 
   # ─── BRANCH 1: PID GATE ─────────────────────────────────────────────────
   - id: pid_multisource_check
@@ -61,14 +71,21 @@ nodes:
     plain_language: "Is the CNN classification confidence above threshold?"
     rationale: |
       Doctrine does not specify a numeric confidence threshold (uses 'reasonable certainty').
-      We use 0.85 as a starting threshold — TUNABLE WITH COLLEN.
-    condition: cnn_confidence >= 0.85
+      Thresholds vary by target class — personnel classification is materially harder than vehicle
+      classification (uniform variability, body-armor concealment, civilian-vs-combatant ambiguity),
+      so we set a higher bar there. Vehicles are more visually distinctive. TUNABLE WITH COLLEN.
+    thresholds_by_target_class:
+      vehicle: 0.85
+      personnel: 0.92   # higher bar — personnel classification is harder; flagged for Collen review
+      structure: 0.85
+      default: 0.85
+    condition: cnn_confidence >= thresholds_by_target_class[target.class] else thresholds_by_target_class.default
     on_true: { goto: observation_duration_check }
     on_false:
       result: ENGAGEABLE_WITH_CAVEATS
       flag: "LOW CLASSIFICATION CONFIDENCE — JTAC review especially recommended"
       goto: observation_duration_check
-    open_question_for_collen: "What is your working confidence threshold for engaging based on a sensor classification?"
+    open_question_for_collen: "What is your working confidence threshold for engaging based on a sensor classification? In particular, do you treat vehicle vs personnel classification differently — vehicles are more visually distinctive, while personnel classification has higher false-positive risk (civilian vs combatant)."
 
   - id: observation_duration_check
     type: predicate
@@ -84,20 +101,49 @@ nodes:
       goto: nsl_check
 
   # ─── BRANCH 2: NO-STRIKE LIST ──────────────────────────────────────────
+  # COLLEN FEEDBACK CF-1.1 (2026-05-02):
+  #   "For No-Strike List Nearby is the No-Strike List object within the
+  #    damage radius of the chosen munition."
+  # → The actual block is per-munition (Tree 2 protected_site_in_red).
+  # → Tree 1 only checks two things:
+  #     (a) Is the TARGET ITSELF on the NSL? (e.g., the target is a hospital)
+  #         → block engagement entirely.
+  #     (b) Is an NSL object NEARBY (within the largest CER, ~600 m)?
+  #         → DO NOT block here. Flag NSL_NEARBY and pass to Tree 2 to
+  #           decide per-munition whether the chosen weapon's RED contains it.
+  #
   - id: nsl_check
     type: predicate
-    plain_language: "Is the target itself, or a structure within its location, on the no-strike list?"
+    plain_language: "Is the TARGET ITSELF a no-strike entity (e.g., the target is a hospital)?"
     rationale: |
+      Block only when the target itself is NSL. NSL objects nearby (but not the target) are
+      handled per-munition in Tree 2 — same target may be engageable with a small-frag weapon
+      and not with a large one. Per Collen feedback CF-1.1.
       Cat I (CJCSI 3160.01 Encl B p.B-1 to B-3): hospitals, schools, religious sites, diplomatic
       missions, refugee camps, POW camps, dams/dikes whose engagement floods civilians.
-    condition: any(target_or_collateral in nsl_cat_i)
+    condition: target_is_nsl_cat_i
     on_true:
       result: NOT_ENGAGEABLE
-      flag: "NO-STRIKE LIST MATCH (Category I)"
+      flag: "TARGET IS A NO-STRIKE ENTITY (Category I)"
       escalation: "Status change requires Combatant Commander or designated representative authority"
       override_path: "Self-defense if friendlies are taking fire FROM the protected entity (CJCSI 3160.01 p.C-B-4)"
+    on_false: { goto: nsl_proximity_check }
+    citation: "CJCSI 3160.01 Encl B p.B-1 to B-3, p.C-B-4; Collen feedback CF-1.1"
+
+  - id: nsl_proximity_check
+    type: predicate
+    plain_language: "Is a no-strike entity nearby (within the largest possible weapon's effects radius)?"
+    rationale: |
+      If yes, do NOT block — pass a flag to Tree 2 (munition selection) so it can decide
+      per-munition whether the chosen weapon's RED contains the protected entity. Smaller-frag
+      weapons may be viable; larger-frag may be eliminated.
+    condition: any(nsl_cat_i_object within cde_level_1_cer_m)
+    on_true:
+      flag: "NSL_NEARBY — pass to Tree 2 for per-munition CDE check"
+      pass_to_munition_tree: { nsl_cat_i_objects_in_area: list }
+      goto: nsl_cat_ii_check
     on_false: { goto: nsl_cat_ii_check }
-    citation: "CJCSI 3160.01 Encl B p.B-1 to B-3, p.C-B-4"
+    citation: "CJCSI 3160.01 Encl B; Collen feedback CF-1.1 (2026-05-02)"
 
   - id: nsl_cat_ii_check
     type: predicate
@@ -146,19 +192,36 @@ nodes:
     on_pass: { goto: roe_target_category_check }
 
   # ─── BRANCH 4: ROE GATE ────────────────────────────────────────────────
+  # COLLEN FEEDBACK CF-1.2 (2026-05-02):
+  #   "for rules of engagement, authorize this target type. Just will need to specify
+  #    rules of engagement prior to mission - may generalize this for demo this needs
+  #    pre mission data"
+  # → ROE is loaded as PRE-MISSION data, not encoded in the tree. Tree just enforces
+  #   the category check against whatever ROE was loaded.
+  # → For the hackathon DEMO, use a generic permissive ROE that approves combatant
+  #   categories (vehicles, personnel, structures) and excludes Cat I protected entities.
+  #
   - id: roe_target_category_check
     type: predicate
     plain_language: "Does the current Rules of Engagement authorize engaging this target type?"
     rationale: |
-      ROE is theater-specific. The system reads from a structured ROE feed (e.g., 'tanks YES,
-      civilian vehicles NO except with hostile-act trigger'). This node enforces the category check.
+      ROE is theater-specific and loaded as PRE-MISSION DATA (per Collen CF-1.2). The system
+      reads from a structured ROE feed (e.g., 'tanks YES, civilian vehicles NO except with
+      hostile-act trigger'). This node only enforces the category check against the loaded ROE.
+    pre_mission_data_required: true
+    demo_default: |
+      For hackathon demo, use a generic permissive ROE:
+        approved_categories: [combatant_vehicle, combatant_personnel, combatant_structure]
+        prohibited_munitions: [cluster]
+        excluded_categories: [cat_i_protected]
+      Real deployments: load from theater SPINS / OPORD.
     condition: target_class in roe.approved_categories
     on_true: { goto: tle_quality_check }
     on_false:
       result: NOT_ENGAGEABLE
       flag: "TARGET CATEGORY NOT AUTHORIZED BY CURRENT ROE"
       remedy: "Hold target; brief GFC for ROE waiver if mission-critical"
-    citation: "CJCSI 3160.01 p.D-A-8; JP 3-06 p.IV-43"
+    citation: "CJCSI 3160.01 p.D-A-8; JP 3-06 p.IV-43; Collen feedback CF-1.2"
 
   # ─── BRANCH 5: COORDINATE QUALITY (TLE) ────────────────────────────────
   - id: tle_quality_check
@@ -193,7 +256,7 @@ nodes:
     type: composite
     plain_language: "Is the target functionally distinguishable, dual-use-checked, and free of CBR / environmental hazards?"
     rationale: |
-      First level of the Collateral Damage Estimation cascade. Five sub-checks. Failures route
+      First level of the Collateral Damage Estimation cascade. Four sub-checks. Failures route
       to higher CDE levels (Level 5 = SecDef/POTUS approval unless delegated).
     sub_checks:
       - id: dual_use

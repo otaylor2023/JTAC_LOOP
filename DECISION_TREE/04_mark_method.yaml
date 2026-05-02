@@ -66,7 +66,7 @@ decision_cascade:
     branches:
       BOC:
         if munition_guidance == laser:
-          GOTO: select_laser_designator
+          GOTO: time_of_day_branch  # day/night cascades each handle laser selection
         else:
           SELECT: "no mark"
           PLAN_BACKUP: talk_on_for_aircrew_situational_awareness

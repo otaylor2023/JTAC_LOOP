@@ -23,7 +23,7 @@
           "ui_field": "confidence_meter",
           "ui_warning_threshold": 0.7
         },
-        "system_version": { "type": "string", "default": "decision_tree_v1.0" }
+        "system_version": { "type": "string", "default": "decision_tree_v1.0", "ui_field": "header_version_pill" }
       }
     },
 
@@ -57,10 +57,10 @@
         },
         "sufficient_for_engagement": {
           "type": "boolean",
-          "description": "True only if corroborating_sources length >= 2 AND combined confidence above threshold",
+          "description": "True only if corroborating_sources length >= 2 AND each source's confidence >= 0.5. Enforced by top-level allOf clause: setting this to true while either condition is false produces a schema validation error.",
           "ui_field": "pid_sufficient_indicator"
         },
-        "citation": { "type": "string", "default": "JFO ATTP ¶1-136; CJCSI 3160.01 p.D-A-7" }
+        "citation": { "type": "string", "default": "JFO ATTP ¶1-136; CJCSI 3160.01 p.D-A-7", "ui_field": "pid_citation_footer" }
       }
     },
 
@@ -248,7 +248,8 @@
           "required": ["direction", "distance_m"],
           "description": "Friendly position relative to target. Cardinal/sub-cardinal direction + distance in meters.",
           "properties": {
-            "direction": { "type": "string", "enum": ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] },
+            "direction": { "type": "string", "description": "Cardinal/sub-cardinal (N, NE, E, SE, S, SW, W, NW) OR named TRP reference" },
+            "trp_id": { "type": "string", "description": "If using a Target Reference Point as origin instead of cardinal direction" },
             "distance_m": { "type": "integer" },
             "value": { "type": "string", "description": "Formatted e.g. 'SW 800m'" },
             "exposure": { "type": "string", "enum": ["open", "vehicle_mounted", "dug_in", "armored", "in_structure"] },
@@ -280,7 +281,8 @@
               "line_6": { "$ref": "#/properties/nine_line/properties/line_6" },
               "line_8": { "$ref": "#/properties/nine_line/properties/line_8" }
             }
-          }
+          },
+          "ui_field": "nine_line_additional_targets_list"
         }
       }
     },
@@ -364,33 +366,37 @@
 
     "routing": {
       "type": "object",
-      "description": "9-line ALWAYS routes drone → JTAC → GFC → aircraft. No bypass.",
+      "description": "9-line ALWAYS routes drone → JTAC. From JTAC, ENGAGEABLE outputs route to GFC; NOT_ENGAGEABLE outputs close at JTAC for visibility (never silently dropped).",
       "required": ["chain", "current_step", "next_recipient", "final_approver"],
       "properties": {
         "chain": {
           "type": "array",
           "default": ["system_generated", "jtac_review", "gfc_approval", "aircrew_transmit"],
-          "items": { "type": "string" }
+          "items": { "type": "string" },
+          "ui_field": "routing_chain_visualization"
         },
         "current_step": {
           "type": "string",
-          "enum": ["system_generated", "jtac_review", "gfc_approval", "aircrew_transmit", "executed", "aborted"],
+          "enum": ["system_generated", "jtac_review", "gfc_approval", "aircrew_transmit", "executed", "aborted", "closed_not_engaged"],
           "ui_field": "routing_progress_indicator"
         },
         "next_recipient": {
           "type": "string",
           "enum": ["jtac", "gfc", "aircrew"],
-          "default": "jtac"
+          "default": "jtac",
+          "ui_field": "routing_next_recipient_badge"
         },
         "final_approver": {
           "type": "string",
           "default": "gfc",
-          "description": "GFC always required for transmission. Elevated approvers if requires_elevated_approval."
+          "description": "GFC always required for transmission. Elevated approvers if requires_elevated_approval.",
+          "ui_field": "routing_final_approver_badge"
         },
         "elevated_approver": {
           "type": "string",
           "enum": ["division_commander", "ccdr", "sec_def", "potus"],
-          "description": "Populated only if requires_elevated_approval is true"
+          "description": "Populated only if requires_elevated_approval is true",
+          "ui_field": "routing_elevated_approver_badge"
         },
         "jtac_action": {
           "type": "object",
@@ -422,7 +428,8 @@
               "timestamp_utc": { "type": "string", "format": "date-time" },
               "details": { "type": "string" }
             }
-          }
+          },
+          "ui_field": "routing_audit_log_table"
         }
       }
     },
@@ -456,5 +463,56 @@
       },
       "ui_field": "reasoning_drilldown"
     }
-  }
+  },
+
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "properties": {
+              "engageability": { "const": "NOT_ENGAGEABLE" }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "routing": {
+            "properties": {
+              "chain": { "const": ["system_generated", "jtac_review", "closed_not_engaged"] },
+              "next_recipient": { "const": "jtac" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "pid": {
+            "properties": {
+              "sufficient_for_engagement": { "const": true }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "pid": {
+            "properties": {
+              "corroborating_sources": {
+                "minItems": 2,
+                "items": {
+                  "properties": {
+                    "confidence": { "minimum": 0.5 }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

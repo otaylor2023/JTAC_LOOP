@@ -202,20 +202,23 @@ flags:
 
 output_format:
   ordering:
-    1: laser_to_target_line                # if laser
-    2: desired_ordnance_or_effects
+    # ── REMARKS (NOT mandatory readback) — JP 3-09.3 V-30 to V-31 ──
+    1: laser_to_target_line                # LTL if laser in use
+    2: desired_ordnance_or_effects         # weapons effects desired
     3: surface_to_air_threats              # type, dist, suppression, GTL
-    4: additional_fires_on_battlefield     # friendly artillery
+    4: additional_fires_on_battlefield     # friendly artillery, GTL
     5: additional_radio_calls_requested    # IP inbound, IN call, time to roll-in
-    6: hazards_weather_TLE_NVD             # additional context
-    7: PLA_post_launch_abort               # if approved
-    8: danger_close                        # restriction
-    9: ACAs                                # airspace coordination areas
-    10: FAH                                # final attack heading
-    11: lateral_altitude_separation
-    12: approval_out_of_BP                 # rotary wing
-    13: TOT_or_TTT                         # always last
-  citation: "JP 3-09.3 V-30 to V-32 (recommended order)"
+    6: hazards_weather_additional_target_info  # TLE, NVD, friendly mark, moving target, time stamp
+    # ── RESTRICTIONS (MANDATORY READBACK) — JP 3-09.3 V-31 to V-32 ──
+    # TOT/TTT must ALWAYS be last to mark end of brief.
+    7: danger_close                        # with GFC initials
+    8: ACAs                                # formal and informal airspace coordination areas
+    9: FAH                                 # final attack heading
+    10: lateral_altitude_separation
+    11: approval_out_of_BP                 # rotary wing only
+    12: PLA_post_launch_abort              # ONLY if approved by supported commander
+    13: TOT_or_TTT                         # ALWAYS last — marks end of brief
+  citation: "JP 3-09.3 V-30 to V-32 (mandatory order; TOT last)"
 
   rendering:
     template: |

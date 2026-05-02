@@ -34,6 +34,7 @@ air_delivered:
   GBU-31: { contact: 335, airburst: 420, citation: "JFIRE Table 86 p.131" }
   GBU-32: { contact: 320, airburst: 410, citation: "JFIRE Table 86 p.131" }
   GBU-38: { contact: 290, airburst: 410, citation: "JFIRE Table 86 p.131" }
+  GBU-54: { contact: 290, airburst: 410, citation: "JFIRE Table 86 p.131 (treated as GBU-38 base)" }
   GBU-39: { contact: 205, airburst: 285, citation: "JFIRE Table 86 p.132" }
   GBU-39_FLM: { contact: 70, airburst: null, citation: "JFIRE Table 86 p.132" }
   GBU-44_Viper_Strike: { contact: 85, airburst: null, citation: "JFIRE Table 86 p.132" }
@@ -97,9 +98,9 @@ rules:
     actions:
       - flag: "DANGER CLOSE"
       - require: "Ground Force Commander initials passed to aircrew via JTAC"
-      - require: "Type 1 control (visual on aircraft AND target)"
+      - require: "Type 1 control IF VIABLE; if Type 1 blocked (GPS munition per JP 3-09.3 III-43), Type 2 with explicit DANGER CLOSE annotation"
       - prefer: "Weapon axis parallel to friendly orientation (reduces long/short fratricide risk)"
-    citation: "JP 3-09.3 III-36; JFIRE Appendix H p.127"
+    citation: "JP 3-09.3 III-36, III-43; JFIRE Appendix H p.127"
 
   block_below_red:
     description: "If friendly distance is significantly below RED, flag for elevated review even with initials."

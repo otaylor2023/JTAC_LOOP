@@ -222,6 +222,7 @@ munitions:
       [vehicle_wheeled_soft, personnel_concentrated, structure_soft]
     restrictions:
       - "EXTREME-low-collateral option (RED 70 m) — preferred when civilians are very close"
+      - "Type 1 control prohibited (GPS-guided)"
     citation: "JFIRE Table 86 p.132"
 
   # ─── UNGUIDED GENERAL-PURPOSE BOMBS ─────────────────────────────────────
@@ -395,6 +396,7 @@ munitions:
   - id: APKWS
     name: APKWS (Advanced Precision Kill Weapon System) 2.75-inch laser-guided rocket
     class: rocket
+    effectiveness_class: rocket_apkws
     warhead_lb: 10  # M151 or M229
     warhead_type: HE_blast_frag
     guidance: laser
@@ -411,6 +413,7 @@ munitions:
   - id: 2.75_HE_unguided
     name: 2.75-inch unguided rocket (HE)
     class: rocket
+    effectiveness_class: rocket_unguided
     warhead_lb: 10
     warhead_type: HE_blast_frag
     guidance: ballistic
@@ -429,6 +432,7 @@ munitions:
   - id: GAU-8
     name: A-10 GAU-8 30 mm (Avenger)
     class: gun
+    effectiveness_class: gun_30mm
     warhead_lb: 0.7
     warhead_type: HE_or_AP
     guidance: ballistic
@@ -447,6 +451,7 @@ munitions:
   - id: gun_20mm
     name: 20 mm cannon (M61, F-15/F-16/F-18 internal)
     class: gun
+    effectiveness_class: gun_20mm
     warhead_lb: 0.2
     warhead_type: HE_frag
     guidance: ballistic
@@ -463,6 +468,7 @@ munitions:
   - id: AC130_105
     name: AC-130 105 mm howitzer
     class: gun
+    effectiveness_class: gun_30mm
     warhead_lb: 33
     warhead_type: HE_frag
     guidance: ballistic
@@ -482,6 +488,7 @@ munitions:
   - id: CBU-87
     name: CBU-87 Combined Effects Munition
     class: cluster
+    effectiveness_class: bomb_cluster
     warhead_lb: 950
     warhead_type: cluster
     guidance: ballistic

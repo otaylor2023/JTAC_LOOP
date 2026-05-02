@@ -91,7 +91,7 @@ scenarios:
         observation_duration_s: 60
         tle_category: CAT_III
       friendlies:
-        - { position: [38.197, 38.498], distance_m: 240, exposure: dug_in, axis_orientation_deg: 030 }
+        - { position: [38.197, 38.498], distance_m: 95, exposure: dug_in, axis_orientation_deg: 030 }
       civilians: []
       protected_sites: []
       aircraft:
@@ -112,8 +112,11 @@ scenarios:
       danger_close: true
       gfc_initials_required: true
       cde_flags: []
-      restrictions: ["DANGER CLOSE — initials <X> required", "FAH parallel to friendly axis 030 ± 30°"]
-      reasoning_summary: "Friendlies at 240m, AGM-114K RED 110m → SAFE; chosen over GBU-12 (RED 275m) which would be danger close."
+      restrictions:
+        - "DANGER CLOSE — friendlies inside AGM-114K RED (95m vs 110m)"
+        - "DANGER CLOSE — initials <X> required"
+        - "FAH parallel to friendly axis 030 ± 30°"
+      reasoning_summary: "Friendlies at 95m, AGM-114K RED 110m → DANGER CLOSE; GFC initials required; Type 1 forced. Self-defense override (taking effective fire) preserves engagement authorization."
 
     what_we_want_collen_to_grade:
       - "Hellfire over the GBU-12 — is this your call?"
@@ -160,9 +163,11 @@ scenarios:
       caveats: ["LOW CLASSIFICATION CONFIDENCE", "Cat I protected site (school) within 500m"]
       primary_munition: GBU-39  # smallest frag, sufficient against soft target in structure
       munition_alternatives: [GBU-39_FLM_if_available, AGM-114N_if_helo_on_station]
-      control_type: Type_1     # civilians within 500m forces Type 1 per planning doc heuristic
+      control_type: Type_2     # GBU-39 is GPS-guided → Type 1 prohibited (JP 3-09.3 III-43 note)
       method_of_attack: BOC    # JDAM-class; GBU-39 GPS-only
-      cde_flags: ["Cat I protected within 500m — CDE Level 5 review required for any munition larger than SDB"]
+      cde_flags:
+        - "Cat I protected within 500m — CDE Level 5 review required for any munition larger than SDB"
+        - "TYPE_1_PROHIBITED — GPS munition forces Type 2 (JP 3-09.3 III-43 note); civilians-near heuristic surfaced for review"
       restrictions:
         - "FAH parallel to and away from school (East) — restrict to W or SW attack heading"
         - "Use delay fuze for in-structure target (ATP 3-06.1)"
@@ -171,7 +176,7 @@ scenarios:
       - "Is GBU-39 the right choice, or do you actually prefer to wait and bring in a Hellfire-capable platform for tighter CDE?"
       - "Is your unit's working rule 'school within 500m → don't engage at all without higher approval'?"
       - "How would you handle the 0.79 classification confidence — pull a JFO or ground-team confirmation?"
-      - "Type 1 forced because of civilians in 500m — what's your actual rule on this?"
+      - "Doctrine forces Type 2 here because GBU-39 is GPS-guided. Does that match how you'd actually run it? When you have civilians very close AND need to use a GPS bomb, what do you do?"
 
   # ────────────────────────────────────────────────────────────────────────
   # SCENARIO 5 — Night, no NVG-equipped friendlies
@@ -338,6 +343,8 @@ scenarios:
       munition_alternative: gun_30mm  # direct-fire, exempt from CDE
       munition_eliminations: ["all bombs ≥500 lb — RED exceeds hospital distance"]
       control_type: Type_1
+      cde_flags:
+        - "CAT_I_INSIDE_RED_SELF_DEFENSE — elevated approval required above GFC"
       restrictions:
         - "Cat I (hospital) at 80m — auto-escalates to elevated review"
         - "FAH parallel to and away from hospital (East) — restrict to W attack heading"
@@ -346,7 +353,10 @@ scenarios:
     what_we_want_collen_to_grade:
       - "How do you balance self-defense (friendlies taking fire) against a hospital at 80m?"
       - "AGM-114N thermobaric vs 30mm strafe — which would you actually choose here?"
-      - "Does self-defense override the Cat I protected-site block, or does it just adjust the procedure?"
+      - "Doctrinal pathway here is CJCSI 3160.01 p.C-B-4 — 'troops in contact and taking hostile fire from
+         traditional No-Strike entities.' Self-defense override does NOT silently override the Cat I block;
+         it surfaces a CAT_I_INSIDE_RED_SELF_DEFENSE flag that requires elevated approval (above GFC).
+         Does this match how you'd actually run it, or would you push it higher?"
 
   # ────────────────────────────────────────────────────────────────────────
   # SCENARIO 9 — Low confidence classification
