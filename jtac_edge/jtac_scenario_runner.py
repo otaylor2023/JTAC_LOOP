@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-toy_jetson.py — simulated Jetson detection loop for autoJTAC demo.
+jtac_scenario_runner.py — replay scenario JSON to ATAK/WinTAK (CoT) with optional per-frame plugin recommendations.
 
-Reads bay_scenario.json and replays frames in order, sending CoT
+Reads a scenario JSON file (default: data/old_scenarios/bay_scenario.json) and replays frames in order, sending CoT
 to WinTAK/ATAK via UDP (multicast by default). Handles adds, updates, and removes
 automatically via TAKBridge.sync_detections().
 
@@ -11,17 +11,25 @@ that group/port. For a viewer on a server, push unicast to its IP and inbound
 UDP CoT port (WinTAK: Preferences → Network — often 4242).
 
 Usage:
-    python toy_jetson.py                          # default: reads bay_scenario.json
-    python toy_jetson.py --scenario my_data.json  # custom scenario file
-    python toy_jetson.py --speed 2.0              # 2x playback speed
-    python toy_jetson.py --loop                   # loop forever (unless scenario sets single_run)
-    python toy_jetson.py --host 239.2.3.1         # custom multicast group
-    python toy_jetson.py --unicast 10.0.0.5:4242  # also UDP unicast to WinTAK host
-    python toy_jetson.py --no-multicast --unicast 192.168.1.50:4242
-    python toy_jetson.py --mcast-iface 192.168.1.2  # multicast egress NIC (multi-homed)
+    python jtac_edge/jtac_scenario_runner.py                # default: data/old_scenarios/bay_scenario.json (relative to jtac_edge/)
+    python jtac_edge/jtac_scenario_runner.py --scenario my_data.json
+    python jtac_edge/jtac_scenario_runner.py --speed 2.0
+    python jtac_edge/jtac_scenario_runner.py --loop
+    python jtac_edge/jtac_scenario_runner.py --host 239.2.3.1
+    python jtac_edge/jtac_scenario_runner.py --unicast 10.0.0.5:4242
+    python jtac_edge/jtac_scenario_runner.py --no-multicast --unicast 192.168.1.50:4242
+    python jtac_edge/jtac_scenario_runner.py --mcast-iface 192.168.1.2
+    python jtac_edge/jtac_scenario_runner.py --scenario jtac_edge/data/old_scenarios/las_vegas_scenario.json --phone
+    python jtac_edge/jtac_scenario_runner.py --scenario x.json --tablet --plugin-host 10.0.0.5
+    python jtac_edge/jtac_scenario_runner.py --scenario x.json --phone --once
+    python jtac_edge/jtac_scenario_runner.py --frame-sec 3 --lat-offset-deg 0.0002
+    python jtac_edge/jtac_scenario_runner.py --hold
+    python jtac_edge/jtac_scenario_runner.py --hold-only --hold-frame first
+
+Node for recommendations: install ``node``/``nodejs``, or set ``JTAC_NODE`` / ``NODE_BINARY`` to the binary path.
 
 Scenario JSON (optional keys):
-    frame_interval_sec — minimum seconds between frames (also caps vs t_sec deltas).
+    frame_interval_sec — used only when ``--frame-sec 0``: minimum seconds between frames vs ``t_sec`` deltas.
     single_run — if true, ignore --loop and exit after one play-through (linger still runs after).
     post_clear_sleep_sec — seconds to wait before CoT deletes (default 3).
     sync_stale_seconds — CoT stale time on every sync during playback (default 30; use ≥120 for slow frames).
@@ -40,11 +48,20 @@ Scenario JSON (optional keys):
 import argparse
 import json
 import math
-import socket
-import time
+import os
 import pathlib
+import shutil
+import socket
+import subprocess
+import sys
+import tempfile
+import time
 from datetime import datetime, timezone, timedelta
 from typing import Optional
+
+_REPO = pathlib.Path(__file__).resolve().parent
+_BUNDLE_MJS = _REPO / "scenario-frame-to-plugin-bundle.mjs"
+_SEND_PLUGIN_PY = _REPO / "send_plugin_json_udp.py"
 
 # ─── TAKBridge (inline so this file is self-contained) ───────────────────────
 
@@ -159,7 +176,13 @@ class TAKBridge:
         self._send(cot)
         self.active.pop(uid, None)
 
-    def sync_detections(self, detections: list[dict], stale_seconds: int = 30):
+    def sync_detections(
+        self,
+        detections: list[dict],
+        stale_seconds: int = 30,
+        *,
+        verbose: bool = True,
+    ):
         """Diff current detections against active markers — add, update, remove."""
         incoming_uids = {d["uid"] for d in detections}
 
@@ -167,7 +190,8 @@ class TAKBridge:
         for uid in list(self.active.keys()):
             if uid not in incoming_uids:
                 self.delete_target(uid)
-                print(f"  [-] REMOVED  {uid}")
+                if verbose:
+                    print(f"  [-] REMOVED  {uid}")
 
         # add or update
         for det in detections:
@@ -182,14 +206,49 @@ class TAKBridge:
                 confidence     = det.get("confidence", 0.0),
                 stale_seconds  = det.get("stale_seconds", stale_seconds),
             )
-            icon = {"friendly": "🟦", "hostile": "🔴",
-                    "unknown":  "🟡", "neutral": "⬜"}.get(
-                        det.get("classification", "unknown"), "⬜")
-            print(f"  [{action}] {icon} {det['callsign']:12s} "
-                  f"({det['classification']:8s} {det['confidence']:.0%})  "
-                  f"{det['lat']:.4f}, {det['lon']:.4f}"
-                  + (f"  — {det['note']}" if det.get("note") else ""))
+            if verbose:
+                icon = {"friendly": "🟦", "hostile": "🔴",
+                        "unknown":  "🟡", "neutral": "⬜"}.get(
+                            det.get("classification", "unknown"), "⬜")
+                print(f"  [{action}] {icon} {det['callsign']:12s} "
+                      f"({det['classification']:8s} {det['confidence']:.0%})  "
+                      f"{det['lat']:.4f}, {det['lon']:.4f}"
+                      + (f"  — {det['note']}" if det.get("note") else ""))
             time.sleep(0.05)
+
+    def hold_active(
+        self,
+        detections: list[dict],
+        *,
+        interval_sec: float = 12.0,
+        stale_seconds: int = 120,
+        verbose_refresh: bool = False,
+    ) -> None:
+        """
+        Re-send the same detections on a fixed interval with updated stale times
+        so ATAK keeps stationary tracks on the map. Runs until KeyboardInterrupt.
+
+        CoT only — does not run the recommendation / plugin UDP pipeline.
+        """
+        n = len(detections)
+        print(
+            f"\n📌 Hold: {n} track(s), refresh every {interval_sec:g}s, "
+            f"stale={stale_seconds}s (Ctrl+C to stop)"
+        )
+        tick = 0
+        silent_announced = False
+        while True:
+            tick += 1
+            vr = verbose_refresh or tick == 1
+            self.sync_detections(
+                detections,
+                stale_seconds=stale_seconds,
+                verbose=vr,
+            )
+            if not vr and not verbose_refresh and not silent_announced:
+                print("  (further hold refreshes are silent — Ctrl+C to quit)")
+                silent_announced = True
+            time.sleep(interval_sec)
 
     def clear_all(self):
         for uid in list(self.active.keys()):
@@ -215,6 +274,116 @@ def load_scenario(path: pathlib.Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _find_node_executable() -> Optional[str]:
+    """
+    Resolve Node for recommendation bundle script.
+    Order: JTAC_NODE, NODE_BINARY, NODE env; then ``node`` / ``nodejs`` on PATH;
+    then common install paths (Debian often ships ``nodejs`` only).
+    """
+    for key in ("JTAC_NODE", "NODE_BINARY", "NODE"):
+        raw = os.environ.get(key)
+        if raw:
+            cand = raw.strip().strip('"').strip("'")
+            if cand and os.path.isfile(cand) and os.access(cand, os.X_OK):
+                return cand
+    for name in ("node", "nodejs"):
+        w = shutil.which(name)
+        if w and os.access(w, os.X_OK):
+            return w
+    for fixed in (
+        "/usr/bin/node",
+        "/usr/bin/nodejs",
+        "/usr/local/bin/node",
+        "/opt/homebrew/bin/node",
+    ):
+        if os.path.isfile(fixed) and os.access(fixed, os.X_OK):
+            return fixed
+    return None
+
+
+def _run_plugin_recommendation_udp(
+    scenario_path: pathlib.Path,
+    frame_list_index: int,
+    plugin_dest: Optional[str],
+    plugin_host: Optional[str],
+    type3_window: bool,
+    lat_offset_deg: float,
+    lon_offset_deg: float,
+) -> None:
+    """
+    Generate jtac_plugin_targets with Node (decision tree only), then send UDP via Python.
+    """
+    node = _find_node_executable()
+    if not node:
+        print(
+            "  [plugin UDP] skipped: no Node.js binary found. Install ``node`` or ``nodejs``, "
+            "or set JTAC_NODE to the full path (e.g. export JTAC_NODE=/usr/bin/nodejs)."
+        )
+        return
+    cmd = [
+        node,
+        str(_BUNDLE_MJS),
+        str(scenario_path.resolve()),
+        "--frame",
+        str(frame_list_index),
+        "--json-only",
+    ]
+    if type3_window:
+        cmd.append("--type3-window")
+    if lat_offset_deg != 0.0 or lon_offset_deg != 0.0:
+        cmd.extend(
+            [
+                "--lat-offset-deg",
+                str(lat_offset_deg),
+                "--lon-offset-deg",
+                str(lon_offset_deg),
+            ]
+        )
+    r = subprocess.run(
+        cmd,
+        cwd=str(_REPO),
+        capture_output=True,
+        text=True,
+    )
+    if r.returncode != 0:
+        err = (r.stderr or r.stdout or "").strip()
+        print(f"  [plugin UDP] bundle failed ({r.returncode}): {err[:500]}")
+        return
+    bundle_text = r.stdout
+    if not bundle_text.strip():
+        print("  [plugin UDP] empty bundle from recommendation script")
+        return
+    fd, tmp = tempfile.mkstemp(suffix=".json", prefix="jtac_plugin_")
+    try:
+        os.write(fd, bundle_text.encode("utf-8"))
+        os.close(fd)
+        send_cmd = [sys.executable, str(_SEND_PLUGIN_PY), tmp]
+        if plugin_host:
+            send_cmd.extend(["--host", plugin_host])
+        elif plugin_dest == "phone":
+            send_cmd.append("--phone")
+        elif plugin_dest == "tablet":
+            send_cmd.append("--tablet")
+        s = subprocess.run(
+            send_cmd,
+            cwd=str(_REPO),
+            capture_output=True,
+            text=True,
+        )
+        if s.returncode != 0:
+            err = (s.stderr or s.stdout or "").strip()
+            print(f"  [plugin UDP] send failed ({s.returncode}): {err[:400]}")
+        else:
+            line = (s.stdout or "").strip().splitlines()
+            if line:
+                print(f"  [plugin UDP] {line[-1]}")
+    finally:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+
+
 _EARTH_M_PER_DEG_LAT = 111_320.0
 
 
@@ -237,6 +406,26 @@ def _circle_kinematics(
     r_p = r_play * (0.82 + (h % 13) / 40.0)
     r_l = r_linger * (0.82 + ((h >> 3) % 13) / 40.0)
     return phi0, omega_play, omega_linger, r_p, r_l
+
+
+def _apply_geo_offset_to_detections(
+    detections: list[dict],
+    lat_offset_deg: float,
+    lon_offset_deg: float,
+) -> list[dict]:
+    """Shift all track lat/lon (degrees). Positive lat = north, positive lon = east."""
+    if lat_offset_deg == 0.0 and lon_offset_deg == 0.0:
+        return detections
+    out: list[dict] = []
+    for d in detections:
+        out.append(
+            {
+                **d,
+                "lat": float(d["lat"]) + lat_offset_deg,
+                "lon": float(d["lon"]) + lon_offset_deg,
+            }
+        )
+    return out
 
 
 def _wiggle_track_positions(
@@ -293,6 +482,16 @@ def _linger_track_templates(frames: list[dict], wiggle_all: bool) -> list[dict]:
     return final + list(carried.values())
 
 
+def _hold_frame_detections(scenario: dict, which: str) -> list[dict]:
+    """Copy detections from the first or last frame (stationary hold; no wiggle)."""
+    frames = scenario["frames"]
+    if not frames:
+        raise ValueError("scenario has no frames")
+    key = which.strip().lower()
+    idx = 0 if key == "first" else -1
+    return [dict(d) for d in frames[idx]["detections"]]
+
+
 def _linger_forever(
     bridge: TAKBridge,
     templates: list[dict],
@@ -333,14 +532,54 @@ def _linger_forever(
 
 # ─── Main playback loop ───────────────────────────────────────────────────────
 
-def play(scenario: dict, bridge: TAKBridge,
-         speed: float = 1.0, loop: bool = False, linger: bool = False):
+def play(
+    scenario: dict,
+    bridge: TAKBridge,
+    speed: float = 1.0,
+    loop: bool = False,
+    linger: bool = False,
+    *,
+    scenario_path: Optional[pathlib.Path] = None,
+    send_plugin_udp: bool = False,
+    plugin_dest: Optional[str] = None,
+    plugin_host: Optional[str] = None,
+    plugin_type3_window: bool = False,
+    plugin_udp_once: bool = False,
+    frame_step_sec: float = 3.0,
+    lat_offset_deg: float = 0.0,
+    lon_offset_deg: float = 0.0,
+    hold: bool = False,
+    hold_only: bool = False,
+    hold_interval: float = 12.0,
+    hold_stale_seconds: int = 120,
+    hold_frame: str = "last",
+    hold_verbose_refresh: bool = False,
+) -> None:
 
     frames = scenario["frames"]
     name   = scenario.get("scenario", "Unknown Scenario")
     # Scenario can force one shot (ignores CLI --loop) for canned training files.
     if scenario.get("single_run"):
         loop = False
+
+    if hold or hold_only:
+        loop = False
+
+    hf = hold_frame.strip().lower()
+    if hf not in ("first", "last"):
+        hf = "last"
+
+    if hold_only:
+        raw = _hold_frame_detections(scenario, hf)
+        dets = _apply_geo_offset_to_detections(raw, lat_offset_deg, lon_offset_deg)
+        print(f"\n{'='*60}\n  {name}  (hold-only, {hf} frame)\n{'='*60}")
+        bridge.hold_active(
+            dets,
+            interval_sec=hold_interval,
+            stale_seconds=hold_stale_seconds,
+            verbose_refresh=hold_verbose_refresh,
+        )
+        return
 
     linger = bool(linger or scenario.get("linger_forever"))
     min_gap = scenario.get("frame_interval_sec")
@@ -380,23 +619,44 @@ def play(scenario: dict, bridge: TAKBridge,
                 radius_m_play=r_play,
                 omega_scale=omega_scale,
             )
+            dets = _apply_geo_offset_to_detections(dets, lat_offset_deg, lon_offset_deg)
 
             print(f"\n── Frame {frame_no:02d}  t={t_sec:>4}s  "
                   f"({len(dets)} detections) ──")
 
             bridge.sync_detections(dets, stale_seconds=sync_stale)
 
+            if send_plugin_udp and (not plugin_udp_once or i == 0):
+                if scenario_path is None:
+                    print("  [plugin UDP] skipped: no scenario path (internal error)")
+                else:
+                    _run_plugin_recommendation_udp(
+                        scenario_path,
+                        i,
+                        plugin_dest,
+                        plugin_host,
+                        plugin_type3_window,
+                        lat_offset_deg,
+                        lon_offset_deg,
+                    )
+
             # sleep until next frame (or end)
             if i < len(frames) - 1:
-                next_t = frames[i + 1]["t_sec"]
-                dt = (next_t - t_sec) / max(speed, 1e-6)
-                if min_gap is not None:
-                    dt = max(dt, float(min_gap) / max(speed, 1e-6))
+                if frame_step_sec > 0:
+                    dt = float(frame_step_sec) / max(speed, 1e-6)
+                else:
+                    next_t = frames[i + 1]["t_sec"]
+                    dt = (next_t - t_sec) / max(speed, 1e-6)
+                    if min_gap is not None:
+                        dt = max(dt, float(min_gap) / max(speed, 1e-6))
                 print(f"  ⏱  next frame in {dt:.1f}s ...")
                 time.sleep(dt)
 
         if linger:
             linger_dets = _linger_track_templates(frames, wiggle_all)
+            linger_dets = _apply_geo_offset_to_detections(
+                linger_dets, lat_offset_deg, lon_offset_deg
+            )
             if reset_b4_linger:
                 bridge.clear_all()
                 print(
@@ -419,6 +679,21 @@ def play(scenario: dict, bridge: TAKBridge,
             )
             return
 
+        if hold:
+            raw = _hold_frame_detections(scenario, hf)
+            dets = _apply_geo_offset_to_detections(raw, lat_offset_deg, lon_offset_deg)
+            print(
+                f"\n✅ Scenario complete — holding {len(dets)} track(s) "
+                f"({hf} frame), no auto-clear."
+            )
+            bridge.hold_active(
+                dets,
+                interval_sec=hold_interval,
+                stale_seconds=hold_stale_seconds,
+                verbose_refresh=hold_verbose_refresh,
+            )
+            return
+
         print(f"\n✅ Scenario complete. Clearing all markers in {post_clear_sleep:.0f}s...")
         time.sleep(post_clear_sleep)
         bridge.clear_all()
@@ -435,10 +710,10 @@ def play(scenario: dict, bridge: TAKBridge,
 # ─── CLI ──────────────────────────────────────────────────────────────────────
 
 def parse_args():
-    p = argparse.ArgumentParser(description="Toy Jetson detection loop — autoJTAC demo")
+    p = argparse.ArgumentParser(description="JTAC_LOOP scenario runner — CoT playback + optional plugin UDP")
     p.add_argument("--scenario", type=pathlib.Path,
-                   default=pathlib.Path(__file__).parent / "bay_scenario.json",
-                   help="Path to scenario JSON (default: bay_scenario.json)")
+                   default=pathlib.Path(__file__).parent / "data/old_scenarios/bay_scenario.json",
+                   help="Path to scenario JSON (default: data/old_scenarios/bay_scenario.json)")
     p.add_argument("--host", default="239.2.3.1",
                    help="Multicast group (default: 239.2.3.1)")
     p.add_argument("--port", type=int, default=6969,
@@ -464,10 +739,94 @@ def parse_args():
     )
     p.add_argument("--speed", type=float, default=1.0,
                    help="Playback speed multiplier (default: 1.0, try 3.0 for fast demo)")
+    p.add_argument(
+        "--frame-sec",
+        type=float,
+        default=3.0,
+        metavar="SEC",
+        help="Fixed wall-clock seconds between frames (default: 3). Use 0 for legacy pacing from scenario t_sec and frame_interval_sec.",
+    )
+    p.add_argument(
+        "--lat-offset-deg",
+        type=float,
+        default=0.0002,
+        metavar="DEG",
+        help="Add to every track latitude before CoT / plugin (default ~0.0002° ≈ 22 m north). Use 0 for no shift.",
+    )
+    p.add_argument(
+        "--lon-offset-deg",
+        type=float,
+        default=0.0,
+        metavar="DEG",
+        help="Add to every track longitude (default 0). Positive is east.",
+    )
     p.add_argument("--loop", action="store_true",
                    help="Loop scenario forever")
     p.add_argument("--linger", action="store_true",
                    help="After last frame, wiggle / refresh tracks forever until Ctrl+C (see scenario linger_* keys)")
+    p.add_argument(
+        "--hold",
+        action="store_true",
+        help="After the last frame, refresh CoT only (stationary tracks) until Ctrl+C — no auto clear; "
+        "does not re-send plugin recommendations (those only run during frame playback, per --once if set).",
+    )
+    p.add_argument(
+        "--hold-only",
+        action="store_true",
+        help="Skip frame playback; CoT hold only until Ctrl+C — no plugin UDP (use normal playback for recs).",
+    )
+    p.add_argument(
+        "--hold-interval",
+        type=float,
+        default=12.0,
+        metavar="SEC",
+        help="Seconds between CoT refreshes while holding (default: 12)",
+    )
+    p.add_argument(
+        "--hold-stale-seconds",
+        type=int,
+        default=120,
+        metavar="N",
+        help="CoT stale horizon while holding — should exceed ~2× hold-interval (default: 120)",
+    )
+    p.add_argument(
+        "--hold-frame",
+        choices=("first", "last"),
+        default="last",
+        help="Which frame's detections to use for --hold / --hold-only (default: last)",
+    )
+    p.add_argument(
+        "--hold-verbose-refresh",
+        action="store_true",
+        help="Print every hold refresh line-by-line (default: first refresh only)",
+    )
+    pg = p.add_mutually_exclusive_group()
+    pg.add_argument(
+        "--phone",
+        action="store_true",
+        help="Send plugin recommendations (UDP 6970) to ATAK_PHONE_IP from jtac_edge/data/static_ips.env (each frame, or first only with --once)",
+    )
+    pg.add_argument(
+        "--tablet",
+        action="store_true",
+        help="Send plugin recommendations (UDP 6970) to ATAK_TABLET_IP from jtac_edge/data/static_ips.env (each frame, or first only with --once)",
+    )
+    p.add_argument(
+        "--plugin-host",
+        default=None,
+        metavar="IP",
+        help="Override plugin UDP destination (passed to send_plugin_json_udp.py --host)",
+    )
+    p.add_argument(
+        "--plugin-type3-window",
+        action="store_true",
+        help="Enable Type-3 multi-target window when building recommendation bundles",
+    )
+    p.add_argument(
+        "--once",
+        action="store_true",
+        help="Send plugin recommendations only for the first frame (still sends CoT every frame). Use with --phone, --tablet, or --plugin-host.",
+    )
     return p.parse_args()
 
 
@@ -479,7 +838,10 @@ def main():
         print("ERROR: --no-multicast requires at least one --unicast HOST[:PORT]")
         return
 
-    print(f"autoJTAC toy Jetson  |  {args.speed}x speed")
+    print(
+        f"JTAC_LOOP scenario runner  |  {args.speed}x speed  |  frame step {args.frame_sec:g}s  |  "
+        f"Δlat {args.lat_offset_deg:g}° Δlon {args.lon_offset_deg:g}°"
+    )
     if not args.no_multicast:
         print(f"  Multicast CoT: {args.host}:{args.port}")
     else:
@@ -488,6 +850,35 @@ def main():
         print(f"  Unicast CoT:   {h}:{prt}")
     if args.mcast_iface:
         print(f"  Multicast egress interface: {args.mcast_iface}")
+    plugin_dest: Optional[str] = None
+    if args.phone:
+        plugin_dest = "phone"
+        print("  Plugin UDP: --phone (ATAK_PHONE_IP from jtac_edge/data/static_ips.env)")
+    elif args.tablet:
+        plugin_dest = "tablet"
+        print("  Plugin UDP: --tablet (ATAK_TABLET_IP from jtac_edge/data/static_ips.env)")
+    if args.plugin_host:
+        print(f"  Plugin UDP host override: {args.plugin_host}")
+    send_plugin_udp = bool(plugin_dest or args.plugin_host)
+    if args.once and not send_plugin_udp:
+        print("ERROR: --once requires --phone, --tablet, or --plugin-host")
+        return
+    if args.once:
+        print("  Plugin UDP: --once (first frame only)")
+    if args.loop and (args.hold or args.hold_only):
+        print(
+            "NOTE: --loop is ignored with --hold / --hold-only "
+            "(playback runs once, then hold until Ctrl+C)."
+        )
+    if (args.hold or args.hold_only) and args.hold_stale_seconds < args.hold_interval * 2:
+        print(
+            "WARN: --hold-stale-seconds should be at least ~2× --hold-interval "
+            "or tracks may flicker stale in ATAK."
+        )
+    if args.hold:
+        print("  Hold: after playback, refresh stationary tracks until Ctrl+C")
+    if args.hold_only:
+        print(f"  Hold-only: {args.hold_frame} frame, no playback")
     print(f"Scenario: {args.scenario}")
 
     if not args.scenario.exists():
@@ -504,7 +895,28 @@ def main():
     )
 
     try:
-        play(scenario, bridge, speed=args.speed, loop=args.loop, linger=args.linger)
+        play(
+            scenario,
+            bridge,
+            speed=args.speed,
+            loop=args.loop,
+            linger=args.linger,
+            scenario_path=args.scenario if send_plugin_udp else None,
+            send_plugin_udp=send_plugin_udp,
+            plugin_dest=plugin_dest,
+            plugin_host=args.plugin_host,
+            plugin_type3_window=args.plugin_type3_window,
+            plugin_udp_once=args.once,
+            frame_step_sec=args.frame_sec,
+            lat_offset_deg=args.lat_offset_deg,
+            lon_offset_deg=args.lon_offset_deg,
+            hold=args.hold,
+            hold_only=args.hold_only,
+            hold_interval=args.hold_interval,
+            hold_stale_seconds=args.hold_stale_seconds,
+            hold_frame=args.hold_frame,
+            hold_verbose_refresh=args.hold_verbose_refresh,
+        )
     except KeyboardInterrupt:
         print("\n\nInterrupted — clearing all markers...")
         bridge.clear_all()

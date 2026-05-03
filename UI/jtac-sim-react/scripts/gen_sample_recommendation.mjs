@@ -1,5 +1,5 @@
 /**
- * Writes JTAC_LOOP/data/sample_recommendation.json — one recommend() output
+ * Writes JTAC_LOOP/jtac_edge/data/sample_recommendation.json — one recommend() output
  * for demo / Jetson wire format. Rehomes hostile/friendly/self coords to a
  * configurable AO center (default: primary hostile at 26.709723°N, -80.064163°W).
  *
@@ -46,7 +46,7 @@ const rec = recommend({
   time_of_day: 'day',
 });
 
-const outPath = path.resolve(__dirname, '../../../data/sample_recommendation.json');
+const outPath = path.resolve(__dirname, '../../../jtac_edge/data/sample_recommendation.json');
 fs.mkdirSync(path.dirname(outPath), { recursive: true });
 fs.writeFileSync(outPath, JSON.stringify(rec, null, 2) + '\n', 'utf8');
 console.log('Wrote', outPath);

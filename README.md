@@ -1,6 +1,6 @@
-# JTAC_LOOP — FreeTAKServer + Python CoT feed
+# JTAC_LOOP — FreeTAKServer + JTAC edge scenario playback
 
-Run **FreeTAKServer** in Docker, connect **CivTAK** over TLS (or plain TCP for lab), and publish mock or live points from **Python** (`scripts/cot_feed.py`) using [PyTAK](https://github.com/snstac/pytak).
+Run **FreeTAKServer** in Docker and connect **CivTAK** over TLS (or plain TCP for lab). For **multicast CoT + optional plugin recommendations** from scenario JSON, use **`jtac_edge/jtac_scenario_runner.py`**. An older **PyTAK → FTS TCP** helper lives in **`archive/cot_feed.py`** (unmaintained in this layout).
 
 ## Prerequisites
 
@@ -60,7 +60,7 @@ Traffic is **not encrypted** on the wire—only use this on a **trusted LAN**.
 
 If you only need a quick lab check from the Mac itself, you can use **plain TCP 8087** for Python first; CivTAK in the field normally uses **8089 + TLS**.
 
-## 3. Python CoT feed
+## 3. JTAC edge scenario runner (multicast / plugin UDP)
 
 Create a virtual environment and install dependencies:
 
@@ -71,38 +71,19 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
-Run the feed on **the same Mac as Docker** — defaults are **`--host 127.0.0.1 --port 8087`** (no environment variables). ATAK still connects with your LAN IP (**e.g. `10.1.61.69:8087`**).
+Run from the repo root (needs **Node** on `PATH` for plugin recommendations when using `--phone` / `--tablet` / `--plugin-host`):
 
 ```bash
 source .venv/bin/activate
-python scripts/cot_feed.py
-python scripts/cot_feed.py --help
+python jtac_edge/jtac_scenario_runner.py --help
+python jtac_edge/jtac_scenario_runner.py --phone
 ```
 
-If `cot_feed.py` runs on **another** PC on the Wi‑Fi, point it at the Mac:  
-`python scripts/cot_feed.py --host 10.1.61.69 --port 8087`
+Defaults load **`jtac_edge/data/static_ips.env`** for phone/tablet IPs and **`jtac_edge/data/old_scenarios/bay_scenario.json`** unless you pass **`--scenario`**.
 
-SSL injection (uncommon):  
-`python scripts/cot_feed.py --tls --tls-ca deploy/fts-certs/ca.pem --tls-client-cert deploy/fts-certs/Client.p12 --tls-password supersecret`  
-(add `--tls-insecure` only if needed for lab PKI).
+### JSON format (sample point feed)
 
-### `cot_feed.py` flags (see `--help`)
-
-| Flag | Description |
-| --- | --- |
-| `--host` | CoT server (default **`127.0.0.1`**) |
-| `--port` | CoT port (default **`8087`**, or **`8089`** when `--tls`) |
-| `--tls` | Use TLS (`ssl://`) instead of TCP |
-| `--data` | JSON feed path (default `data/sample_feed.json`) |
-| `--interval` | Seconds between broadcast cycles (default `10`) |
-| `--reconnect-sec` | Backoff after disconnect (default `15`) |
-| `--cot-newline` | Append a newline after each event (off by default) |
-| `--stable-uid` | Do not add a per-emit uid suffix (default adds one to avoid FTS DB conflicts) |
-| `--tls-ca`, `--tls-client-cert`, `--tls-password`, … | TLS client options |
-
-### JSON format
-
-See `data/sample_feed.json`. Each point supports `lat`, `lon`, `uid`, `callsign`, `cot_type`, `stale` (seconds).
+See **`jtac_edge/data/sample_feed.json`**. Each point supports `lat`, `lon`, `uid`, `callsign`, `cot_type`, `stale` (seconds). For archived PyTAK TCP injection, see **`archive/cot_feed.py`** (not wired to this layout).
 
 ## 4. Stop the stack
 

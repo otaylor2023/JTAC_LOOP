@@ -13,9 +13,12 @@ Strategy:
 Legacy: tiny single-datagram UTF-8 without JTCH header still works on the plugin.
 
 Usage:
-  python3 scripts/send_plugin_json_udp.py data/sample_plugin_targets_bundle.json --host 10.1.63.83
-  python3 scripts/send_plugin_json_udp.py scripts/bay_scenario_jtac.json
-  (bay_scenario_jtac.json uses top-level ``jtac_plugin_targets`` — same per-target wire as ``targets``.)
+  python3 jtac_edge/send_plugin_json_udp.py jtac_edge/data/sample_plugin_targets_bundle.json --host 10.1.63.83
+  python3 jtac_edge/send_plugin_json_udp.py jtac_edge/data/scenarios/bay_scenario_jtac.json --phone
+  python3 jtac_edge/send_plugin_json_udp.py bundle.json --tablet
+  IPs for --phone / --tablet come from ATAK_PHONE_IP / ATAK_TABLET_IP in jtac_edge/data/static_ips.env
+  (loaded automatically). --host IP overrides any destination.
+  (``jtac_edge/data/scenarios/bay_scenario_jtac.json`` uses top-level ``jtac_plugin_targets`` — same per-target wire as ``targets``.)
 """
 from __future__ import annotations
 
@@ -39,7 +42,7 @@ HEADER_LEN = 20
 
 def _load_static_ips_env() -> None:
     here = Path(__file__).resolve().parent
-    env_file = here.parent / "data" / "static_ips.env"
+    env_file = here / "data" / "static_ips.env"
     if not env_file.is_file():
         return
     for line in env_file.read_text(encoding="utf-8").splitlines():
@@ -141,12 +144,23 @@ def main() -> int:
         type=Path,
         help="Path to JSON (e.g. data/sample_plugin_targets_bundle.json)",
     )
+    dest = p.add_mutually_exclusive_group()
+    dest.add_argument(
+        "--phone",
+        action="store_true",
+        help="Send to ATAK_PHONE_IP from jtac_edge/data/static_ips.env (after load)",
+    )
+    dest.add_argument(
+        "--tablet",
+        action="store_true",
+        help="Send to ATAK_TABLET_IP from jtac_edge/data/static_ips.env (after load)",
+    )
     p.add_argument(
         "--host",
         "-H",
-        default=os.environ.get("ATAK_PHONE_IP"),
+        default=None,
         metavar="IP",
-        help="ATAK LAN IPv4 (default: ATAK_PHONE_IP / data/static_ips.env)",
+        help="ATAK LAN IPv4 (overrides --phone / --tablet). If omitted with neither --phone nor --tablet, default is ATAK_PHONE_IP.",
     )
     p.add_argument("--port", type=int, default=6970, help="UDP port (default: 6970)")
     p.add_argument(
@@ -156,9 +170,19 @@ def main() -> int:
     )
     args = p.parse_args()
 
-    if not args.host:
+    if args.host:
+        host = args.host
+    elif args.phone:
+        host = os.environ.get("ATAK_PHONE_IP")
+    elif args.tablet:
+        host = os.environ.get("ATAK_TABLET_IP")
+    else:
+        host = os.environ.get("ATAK_PHONE_IP")
+
+    if not host:
         print(
-            "error: no host — use --host IP or set ATAK_PHONE_IP in data/static_ips.env",
+            "error: no destination host — use --host IP, or --phone / --tablet with "
+            "ATAK_PHONE_IP / ATAK_TABLET_IP in jtac_edge/data/static_ips.env",
             file=sys.stderr,
         )
         return 2
@@ -177,7 +201,7 @@ def main() -> int:
             if len(raw) > 65000:
                 print("error: file too large for single datagram", file=sys.stderr)
                 return 1
-            sock.sendto(raw, (args.host, args.port))
+            sock.sendto(raw, (host, args.port))
             dgrams = 1
         elif isinstance(obj, dict) and _targets_from_root(obj) is not None:
             targets = _targets_from_root(obj)
@@ -190,17 +214,17 @@ def main() -> int:
             }
             for t in targets:
                 tid = t.get("target_id", "?")
-                n = _emit_target_or_split(sock, args.host, args.port, meta, t)
+                n = _emit_target_or_split(sock, host, args.port, meta, t)
                 dgrams += n
                 print(f"  target {tid}: {n} datagram(s)", file=sys.stderr)
                 time.sleep(0.005)
         else:
             b = _json_min(obj)
-            dgrams = _send_chunked(sock, args.host, args.port, b)
+            dgrams = _send_chunked(sock, host, args.port, b)
     finally:
         sock.close()
 
-    print(f"sent {dgrams} UDP datagram(s) to {args.host}:{args.port}")
+    print(f"sent {dgrams} UDP datagram(s) to {host}:{args.port}")
     return 0
 
 

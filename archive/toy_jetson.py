@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-toy_jetson.py — simulated Jetson detection loop for autoJTAC demo.
+toy_jetson.py — legacy simulated Jetson detection loop (archived). Prefer ``jtac_edge/jtac_scenario_runner.py``.
 
-Reads bay_scenario.json and replays frames in order, sending CoT
+Reads ``jtac_edge/data/old_scenarios/bay_scenario.json`` (or any scenario file) when run from repo root, and replays frames in order, sending CoT
 to WinTAK/ATAK via UDP multicast. Handles adds, updates, and removes
 automatically via TAKBridge.sync_detections().
 
@@ -12,7 +12,7 @@ After playback, markers are removed by default. Use ``--hold`` or
 See TAKBridge.hold_active().
 
 Usage:
-    python toy_jetson.py                          # default: reads bay_scenario.json
+    python archive/toy_jetson.py                  # default: jtac_edge/data/old_scenarios/bay_scenario.json
     python toy_jetson.py --scenario my_data.json  # custom scenario file
     python toy_jetson.py --speed 2.0              # 2x playback speed
     python toy_jetson.py --loop                   # loop forever (still clears between runs)
@@ -296,8 +296,8 @@ def play(
 def parse_args():
     p = argparse.ArgumentParser(description="Toy Jetson detection loop — autoJTAC demo")
     p.add_argument("--scenario", type=pathlib.Path,
-                   default=pathlib.Path(__file__).parent / "bay_scenario.json",
-                   help="Path to scenario JSON (default: bay_scenario.json)")
+                   default=pathlib.Path(__file__).resolve().parent.parent / "jtac_edge/data/old_scenarios/bay_scenario.json",
+                   help="Path to scenario JSON (default: jtac_edge/data/old_scenarios/bay_scenario.json from repo root)")
     p.add_argument("--host", default="239.2.3.1",
                    help="Multicast group (default: 239.2.3.1)")
     p.add_argument("--port", type=int, default=6969,
