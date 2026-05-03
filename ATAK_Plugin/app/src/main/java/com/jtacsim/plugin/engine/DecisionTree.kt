@@ -396,4 +396,114 @@ object DecisionTree {
         val m: Munition, val rating: Rating, val stocked: Int,
         val score: Double, val flags: List<String>,
     )
+
+    // ─────────────────────────────────────────────────────────────────────
+    // MULTI-STRIKE / RECURSIVE PLANNER
+    //
+    // For rapid succession engagements where the drone feed can't update
+    // between strikes. Each step's predicted post-strike state becomes the
+    // input for the next step.
+    // ─────────────────────────────────────────────────────────────────────
+
+    /**
+     * Pure predicted post-strike state. Removes the engaged target from
+     * the feed and decrements the loadout. Doesn't advance time or move
+     * friendlies (rapid-succession assumption).
+     */
+    fun applyStrike(state: TacticalState, rec: Recommendation): TacticalState {
+        if (rec.engageability == "NOT_ENGAGEABLE" || rec.munition == null) return state
+
+        val newHostiles = state.hostiles.filter { it.id != rec.targetId }
+        val newLoadout = state.aircraft.loadout.toMutableMap().apply {
+            val munId = rec.munition.id
+            val cur = this[munId] ?: 0
+            this[munId] = (cur - 1).coerceAtLeast(0)
+        }
+        return state.copy(
+            hostiles = newHostiles,
+            aircraft = state.aircraft.copy(loadout = newLoadout),
+        )
+    }
+
+    data class StrikeStep(
+        val step: Int,
+        val targetId: String,
+        val skipped: Boolean = false,
+        val skipReason: String? = null,
+        val recommendation: Recommendation? = null,
+        val remainingHostiles: Int = 0,
+        val loadoutSnapshot: Map<String, Int> = emptyMap(),
+    )
+
+    data class StrikeSequenceResult(
+        val steps: List<StrikeStep>,
+        val munitionsExpended: Map<String, Int>,
+        val finalRemainingHostileIds: List<String>,
+        val chainBroken: Boolean,
+        val totalStepsPlanned: Int,
+        val successfulSteps: Int,
+    )
+
+    /**
+     * Recursive planner. Each step recomputes against the predicted state
+     * from the prior step. Blocked steps stop the chain and remaining
+     * targets surface as skipped so the JTAC sees what would have happened.
+     */
+    fun recommendSequence(initial: TacticalState, targetSequence: List<String>): StrikeSequenceResult {
+        var cur = initial.copy(aircraft = initial.aircraft.copy(loadout = initial.aircraft.loadout.toMutableMap()))
+        val initialLoadout = initial.aircraft.loadout.toMap()
+        val steps = mutableListOf<StrikeStep>()
+        var chainBroken = false
+
+        for ((i, targetId) in targetSequence.withIndex()) {
+            val target = cur.hostiles.firstOrNull { it.id == targetId }
+            if (target == null) {
+                steps += StrikeStep(
+                    step = i + 1, targetId = targetId, skipped = true,
+                    skipReason = "Target not in predicted feed (already engaged or absent)",
+                )
+                continue
+            }
+            if (chainBroken) {
+                steps += StrikeStep(
+                    step = i + 1, targetId = targetId, skipped = true,
+                    skipReason = "Chain broken by earlier step",
+                )
+                continue
+            }
+
+            val rec = recommend(cur.copy(primaryTargetId = targetId, userHeading = null))
+            steps += StrikeStep(
+                step = i + 1, targetId = targetId,
+                recommendation = rec,
+                remainingHostiles = cur.hostiles.size,
+                loadoutSnapshot = cur.aircraft.loadout.toMap(),
+            )
+
+            if (rec.engageability == "NOT_ENGAGEABLE") {
+                chainBroken = true
+                continue
+            }
+            cur = applyStrike(cur, rec)
+        }
+
+        val expended = mutableMapOf<String, Int>()
+        for ((munId, before) in initialLoadout) {
+            val after = cur.aircraft.loadout[munId] ?: 0
+            if (before > after) expended[munId] = before - after
+        }
+
+        return StrikeSequenceResult(
+            steps = steps,
+            munitionsExpended = expended,
+            finalRemainingHostileIds = cur.hostiles.map { it.id },
+            chainBroken = chainBroken,
+            totalStepsPlanned = targetSequence.size,
+            successfulSteps = steps.count { !it.skipped && it.recommendation != null && it.recommendation.engageability != "NOT_ENGAGEABLE" },
+        )
+    }
+
+    /** Auto-prioritize hostiles by classification confidence (descending). */
+    fun autoPrioritize(hostiles: List<Hostile>): List<String> =
+        hostiles.sortedByDescending { it.cnnConfidence }.map { it.id }
 }

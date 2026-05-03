@@ -3,6 +3,7 @@ import './App.css';
 
 import MapView from './components/MapView';
 import NineLineForm from './components/NineLineForm';
+import StrikeSequence from './components/StrikeSequence';
 import RationaleModal from './components/RationaleModal';
 import SentOverlay from './components/SentOverlay';
 
@@ -87,7 +88,7 @@ export default function App() {
             <span className="count-chip friendly">{friendlies.length} FRIENDLY</span>
           </div>
         </div>
-        <div className="ai-actions" style={{ display: screen === 'nineline' ? 'none' : 'flex' }}>
+        <div className="ai-actions" style={{ display: screen === 'map' ? 'flex' : 'none' }}>
           {aiReady && (
             <button
               className={`ai-toggle${recVisible ? ' on' : ''}`}
@@ -110,6 +111,16 @@ export default function App() {
                 ? `BLOCKED · ${recommendation?.flags?.[0] ?? 'review'}`
                 : `Review 9-Line · ${recommendation?.munition?.primary?.id ?? '—'}`}
           </button>
+          {aiReady && hostiles.length > 1 && (
+            <button
+              className="ai-pill multi"
+              onClick={() => goTo('sequence')}
+              title="Plan multiple rapid strikes — recursive chain"
+            >
+              <span className="pill-dot"></span>
+              Multi-Strike · {hostiles.length}
+            </button>
+          )}
         </div>
       </div>
 
@@ -132,6 +143,25 @@ export default function App() {
               `Nearest friendly ${fl?.id ?? '—'} is ${r.nine_line.line_8.distance_m}m ${r.nine_line.line_8.direction} — ` +
               `${r.flags.includes('DANGER_CLOSE') ? 'DANGER CLOSE, GFC initials required' : 'standoff verified'}. ` +
               `${r.restrictions.length} restrictions applied. Approved by ${self.id} ${new Date().toTimeString().slice(0, 5)}L."`
+          );
+        }}
+      />
+
+      <StrikeSequence
+        active={screen === 'sequence'}
+        hostiles={hostiles}
+        friendlies={friendlies}
+        self={self}
+        onBack={() => goTo('map')}
+        onSendSequence={(seq) => {
+          alert(
+            `MULTI-STRIKE SEQUENCE QUEUED\n\n` +
+            `${seq.successful_steps} strikes · ${Object.entries(seq.munitions_expended).map(([k, v]) => `${k}×${v}`).join(', ')}\n` +
+            `Chain status: ${seq.chain_broken ? 'BROKEN — review' : 'OK'}\n\n` +
+            seq.steps
+              .filter(s => !s.skipped && s.recommendation?.engageability !== 'NOT_ENGAGEABLE')
+              .map((s, i) => `Strike ${i + 1}: ${s.target_id} → ${s.recommendation.munition.primary.id} · ${s.recommendation.game_plan.control_type.replace('_', ' ')}`)
+              .join('\n')
           );
         }}
       />

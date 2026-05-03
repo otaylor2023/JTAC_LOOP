@@ -500,3 +500,159 @@ export function recommend(input) {
 
   return recommendation;
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// MULTI-STRIKE / RECURSIVE PLANNER
+//
+// When a JTAC engages multiple targets in rapid succession, the engine
+// can't wait for the drone feed to update between strikes — too slow.
+// Instead, strike N+1 plans against the PREDICTED state after strike N:
+// the prior target is removed from the hostile list, the munition used
+// is decremented from the aircraft's loadout, and the engine re-runs.
+//
+// This surfaces planning constraints that single-shot recommendation
+// can't see — e.g., "you only have 4 GBU-38, here's the chain that uses
+// them" or "strike 3 is blocked because the last suitable weapon was
+// expended in strike 2."
+// ─────────────────────────────────────────────────────────────────────────
+
+// Pure function: input + recommendation → predicted post-strike input.
+// Doesn't advance the wall clock or move friendlies (rapid succession
+// assumption). Marks the target as engaged + decrements the loadout.
+export function applyStrike(input, recommendation) {
+  const blocked = ['NOT_ENGAGEABLE', 'NO_VIABLE_MUNITION'].includes(recommendation?.engageability);
+  if (blocked || !recommendation?.munition?.primary) return input;
+
+  const targetId = recommendation.target_id;
+  const munId = recommendation.munition.primary.id;
+
+  // Predicted destruction: target leaves the hostile feed.
+  const newHostiles = input.hostiles.filter(h => h.id !== targetId);
+
+  // Decrement the loadout.
+  const oldLoadout = input.aircraft.loadout || {};
+  const newLoadout = { ...oldLoadout };
+  if (newLoadout[munId]) {
+    const prev = newLoadout[munId];
+    const prevCount = typeof prev === 'object' ? (prev.count ?? 0) : prev;
+    const nextCount = Math.max(0, prevCount - 1);
+    newLoadout[munId] = typeof prev === 'object'
+      ? { ...prev, count: nextCount }
+      : nextCount;
+  }
+
+  return {
+    ...input,
+    hostiles: newHostiles,
+    aircraft: { ...input.aircraft, loadout: newLoadout },
+  };
+}
+
+// Recursive planner. Takes an initial input and an ordered list of target
+// IDs to engage; returns the chain of recommendations + a summary.
+//
+// Each step's recommendation is computed against the predicted state
+// produced by applyStrike() on the prior step's recommendation. If a step
+// is blocked, the chain stops and the remaining targets surface as skipped.
+export function recommendSequence(input, targetSequence) {
+  let cur = { ...input, aircraft: { ...input.aircraft, loadout: { ...(input.aircraft.loadout || {}) } } };
+  const initialLoadout = JSON.parse(JSON.stringify(cur.aircraft.loadout));
+  const steps = [];
+  let chainBroken = false;
+
+  for (let i = 0; i < targetSequence.length; i++) {
+    const targetId = targetSequence[i];
+
+    // Skip if target no longer exists in predicted state (already engaged
+    // by a prior step, or just not in the feed).
+    const target = cur.hostiles.find(h => h.id === targetId);
+    if (!target) {
+      steps.push({
+        step: i + 1,
+        target_id: targetId,
+        skipped: true,
+        skip_reason: 'Target not in predicted feed (already engaged or absent)',
+      });
+      continue;
+    }
+
+    // If a previous step broke the chain, mark this and all following
+    // steps as skipped so the JTAC sees what would have happened.
+    if (chainBroken) {
+      steps.push({
+        step: i + 1,
+        target_id: targetId,
+        skipped: true,
+        skip_reason: 'Chain broken by earlier step',
+      });
+      continue;
+    }
+
+    // Compute the recommendation against the predicted state.
+    const stepInput = { ...cur, primaryTargetId: targetId, user_heading: undefined };
+    const rec = recommend(stepInput);
+
+    const loadoutSnapshot = JSON.parse(JSON.stringify(cur.aircraft.loadout));
+    const inputSnapshot = {
+      remaining_hostiles: cur.hostiles.length,
+      remaining_hostile_ids: cur.hostiles.map(h => h.id),
+      loadout: loadoutSnapshot,
+    };
+
+    steps.push({
+      step: i + 1,
+      target_id: targetId,
+      recommendation: rec,
+      input_snapshot: inputSnapshot,
+    });
+
+    // If this step is blocked, the chain breaks here. Subsequent targets
+    // get marked skipped above on next iteration.
+    if (['NOT_ENGAGEABLE', 'NO_VIABLE_MUNITION'].includes(rec.engageability)
+        || rec.flags?.includes('NO_VIABLE_MUNITION')) {
+      chainBroken = true;
+      continue;
+    }
+
+    // Advance state → predicted post-strike.
+    cur = applyStrike(cur, rec);
+  }
+
+  // Diff loadout to tally munitions expended.
+  const munitions_expended = {};
+  for (const munId of Object.keys(initialLoadout)) {
+    const beforeRaw = initialLoadout[munId];
+    const afterRaw = cur.aircraft.loadout[munId];
+    const before = typeof beforeRaw === 'object' ? (beforeRaw.count ?? 0) : (beforeRaw ?? 0);
+    const after = typeof afterRaw === 'object' ? (afterRaw.count ?? 0) : (afterRaw ?? 0);
+    if (before > after) munitions_expended[munId] = before - after;
+  }
+
+  return {
+    steps,
+    munitions_expended,
+    final_remaining_hostiles: cur.hostiles.map(h => ({ id: h.id, target_class: h.target_class })),
+    chain_broken: chainBroken,
+    total_steps_planned: targetSequence.length,
+    successful_steps: steps.filter(s => !s.skipped && s.recommendation && !['NOT_ENGAGEABLE', 'NO_VIABLE_MUNITION'].includes(s.recommendation.engageability)).length,
+  };
+}
+
+// Convenience: auto-prioritize a list of hostiles for sequence planning.
+// Default order: classification confidence DESC. Could swap for
+// proximity-to-friendlies, threat-level, etc.
+export function autoPrioritize(hostiles, mode = 'confidence_desc') {
+  const list = [...hostiles];
+  switch (mode) {
+    case 'confidence_desc':
+      return list.sort((a, b) => (b.cnn_confidence ?? 0) - (a.cnn_confidence ?? 0)).map(h => h.id);
+    case 'movement_first':
+      return list.sort((a, b) => {
+        const aMover = a.movement_state && a.movement_state !== 'stationary';
+        const bMover = b.movement_state && b.movement_state !== 'stationary';
+        return (bMover ? 1 : 0) - (aMover ? 1 : 0);
+      }).map(h => h.id);
+    default:
+      return list.map(h => h.id);
+  }
+}
