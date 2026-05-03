@@ -8,6 +8,9 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "bench:tree": "node scripts/benchmark-decision-tree.mjs",
+    "lv:tree": "node ../../scripts/lv-bridge-to-tree.mjs",
+    "preview": "vite preview",
     "test:engine": "node src/engine/sequenceTests.js",
     "gen:sample-recommendation": "node scripts/gen_sample_recommendation.mjs",
     "gen:sample-plugin-bundle": "node scripts/gen_sample_plugin_bundle.mjs"
