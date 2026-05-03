@@ -1,0 +1,742 @@
+{
+  "schema_version": 1,
+  "generated_at_utc": "2026-05-03T11:22:44.989Z",
+  "jtac_self_id": "JTAC LOOP",
+  "targets": [
+    {
+      "target_id": "NYC.1",
+      "track": {
+        "lat": 40.758,
+        "lon": -73.9855,
+        "callsign": "Times Square Technical"
+      },
+      "options": [
+        {
+          "role": "primary",
+          "recommendation": {
+            "engageability": "ENGAGEABLE",
+            "target_id": "NYC.1",
+            "target_classification": "Light skinned vehicle (technical) with mounted weapon",
+            "target_class": "vehicle_wheeled_soft",
+            "cnn_confidence": 0.94,
+            "flags": [
+              "DANGER_CLOSE"
+            ],
+            "routing": {
+              "chain": [
+                "system_generated",
+                "jtac_review",
+                "gfc_approval",
+                "aircrew_transmit"
+              ],
+              "current_step": "jtac_review",
+              "next_recipient": "jtac",
+              "final_approver": "gfc",
+              "requires_gfc_initials": true
+            },
+            "game_plan": {
+              "control_type": "Type_2",
+              "method_of_attack": "BOT",
+              "clearance_call_phrase": "CLEARED HOT",
+              "abort_call_phrase": "ABORT, ABORT, ABORT"
+            },
+            "munition": {
+              "primary": {
+                "id": "GBU-12",
+                "name": "GBU-12 Paveway II",
+                "guidance": "laser",
+                "warhead_lb": 500,
+                "red_standing_m": 275,
+                "tle_required_m": 30,
+                "fuze": "nose",
+                "count": 2,
+                "effectiveness_rating": "PREFERRED",
+                "effectiveness_score": 1.2071167764421669
+              },
+              "alternatives": [
+                {
+                  "id": "gun_20mm",
+                  "name": "20 mm cannon (M61)",
+                  "why_considered": "Direct fire \u2014 exempt from CDE",
+                  "effectiveness_rating": "ACCEPTABLE",
+                  "effectiveness_score": 0.836390668648378
+                }
+              ],
+              "eliminated": [
+                {
+                  "id": "GBU-16",
+                  "reason": "not deliverable by F-16"
+                },
+                {
+                  "id": "GBU-10",
+                  "reason": "not deliverable by F-16"
+                },
+                {
+                  "id": "GBU-38",
+                  "reason": "TLE CAT_III (30m) > required 10m"
+                },
+                {
+                  "id": "GBU-32",
+                  "reason": "not on aircraft loadout"
+                },
+                {
+                  "id": "GBU-31",
+                  "reason": "not on aircraft loadout"
+                },
+                {
+                  "id": "GBU-54",
+                  "reason": "not on aircraft loadout"
+                },
+                {
+                  "id": "GBU-39",
+                  "reason": "TLE CAT_III (30m) > required 10m"
+                },
+                {
+                  "id": "GBU-39_FLM",
+                  "reason": "not on aircraft loadout"
+                },
+                {
+                  "id": "AGM-114K",
+                  "reason": "not deliverable by F-16"
+                },
+                {
+                  "id": "AGM-114N",
+                  "reason": "not deliverable by F-16"
+                },
+                {
+                  "id": "AGM-114R",
+                  "reason": "not deliverable by F-16"
+                },
+                {
+                  "id": "AGM-65D",
+                  "reason": "not on aircraft loadout"
+                },
+                {
+                  "id": "AGM-65L",
+                  "reason": "not deliverable by F-16"
+                },
+                {
+                  "id": "APKWS",
+                  "reason": "not deliverable by F-16"
+                },
+                {
+                  "id": "GAU-8",
+                  "reason": "not deliverable by F-16"
+                }
+              ]
+            },
+            "nine_line": {
+              "line_1_ip": {
+                "value": "IP NORTH",
+                "filled_by": "jtac_runtime"
+              },
+              "line_2_heading": {
+                "value_deg_magnetic": 298,
+                "filled_by": "computed"
+              },
+              "line_3_distance": {
+                "value": 2.4,
+                "units": "NM",
+                "filled_by": "computed"
+              },
+              "line_4": {
+                "value": 1247,
+                "units": "ft",
+                "datum": "MSL",
+                "mandatory_readback": true
+              },
+              "line_5": {
+                "value": "Light skinned vehicle (technical) with mounted weapon",
+                "target_class": "vehicle_wheeled_soft",
+                "movement_state": "stationary"
+              },
+              "line_6": {
+                "format": "MGRS",
+                "value": "18T WL 85800 12100",
+                "datum": "WGS-84",
+                "tle_category": "CAT_III",
+                "mandatory_readback": true
+              },
+              "line_7": {
+                "mark_type": "laser",
+                "value": "Drone laser, code 1688",
+                "prf_code": "1688",
+                "backup_mark": {
+                  "mark_type": "ir_pointer",
+                  "value": "IR pointer (SPARKLE) \u2014 backup"
+                }
+              },
+              "line_8": {
+                "value": "SE 259 m, dug-in",
+                "direction": "SE",
+                "distance_m": 259
+              },
+              "line_9": {
+                "value": "Egress NW, climb to 8000 ft MSL",
+                "direction": "NW"
+              }
+            },
+            "remarks": [
+              {
+                "text": "LTL 118\u00b0M",
+                "type": "remark",
+                "mandatory_readback": false
+              }
+            ],
+            "restrictions": [
+              {
+                "text": "FAH 128-178 clockwise (laser cone)",
+                "type": "restriction",
+                "mandatory_readback": true
+              },
+              {
+                "text": "DANGER CLOSE \u2014 friendlies inside GBU-12 RED (259m vs 275m); GFC initials required",
+                "type": "restriction",
+                "mandatory_readback": true
+              },
+              {
+                "text": "FAH parallel to friendly axis 045\u00b0 \u00b1 30\u00b0",
+                "type": "restriction",
+                "mandatory_readback": true
+              },
+              {
+                "text": "TOT push when ready",
+                "type": "restriction",
+                "mandatory_readback": true
+              }
+            ],
+            "reasoning_trace": [
+              {
+                "tree": "Tree 1 \u2014 Engageability",
+                "status": "passed",
+                "text": "Hostile vehicle_wheeled_soft, PID 0.94 \u2265 0.8, position fix CAT_III, ROE-approved. PASSED."
+              },
+              {
+                "tree": "Tree 2 \u2014 Munition",
+                "status": "flagged",
+                "text": "Stage 0 movement gate: moving/movable \u2192 laser/IIR primary family (Collen CF-1.3). 2 candidates after hard filter (15 eliminated). Top: GBU-12 (PREFERRED, score 1.21), flags: DANGER_CLOSE."
+              },
+              {
+                "tree": "Tree 3 \u2014 Control",
+                "status": "passed",
+                "text": "Drone-fed CAS + JTAC remote \u2192 Type 2 default. Drone serves as remote sensor (JP 3-09.3 III-45)."
+              },
+              {
+                "tree": "Tree 4 \u2014 Mark",
+                "status": "passed",
+                "text": "Laser-guided weapon \u2192 drone laser primary, PRF 1688."
+              },
+              {
+                "tree": "Tree 5 \u2014 IP/Egress",
+                "status": "passed",
+                "text": "Egress NW (298\u00b0) \u2014 opposite friendly bearing. Attack heading 298\u00b0M."
+              },
+              {
+                "tree": "Tree 6 \u2014 Restrictions",
+                "status": "flagged",
+                "text": "1 remarks + 4 restrictions. Danger close active."
+              }
+            ]
+          }
+        },
+        {
+          "role": "alternate",
+          "recommendation": {
+            "engageability": "ENGAGEABLE",
+            "target_id": "NYC.1",
+            "target_classification": "Light skinned vehicle (technical) with mounted weapon",
+            "target_class": "vehicle_wheeled_soft",
+            "cnn_confidence": 0.94,
+            "flags": [
+              "DANGER_CLOSE"
+            ],
+            "routing": {
+              "chain": [
+                "system_generated",
+                "jtac_review",
+                "gfc_approval",
+                "aircrew_transmit"
+              ],
+              "current_step": "jtac_review",
+              "next_recipient": "jtac",
+              "final_approver": "gfc",
+              "requires_gfc_initials": true
+            },
+            "game_plan": {
+              "control_type": "Type_2",
+              "method_of_attack": "BOT",
+              "clearance_call_phrase": "CLEARED HOT",
+              "abort_call_phrase": "ABORT, ABORT, ABORT"
+            },
+            "munition": {
+              "primary": {
+                "id": "GBU-12",
+                "name": "GBU-12 Paveway II",
+                "guidance": "laser",
+                "warhead_lb": 500,
+                "red_standing_m": 275,
+                "tle_required_m": 30,
+                "fuze": "nose",
+                "count": 2,
+                "effectiveness_rating": "PREFERRED",
+                "effectiveness_score": 1.2071167764421669
+              },
+              "alternatives": [
+                {
+                  "id": "gun_20mm",
+                  "name": "20 mm cannon (M61)",
+                  "why_considered": "Direct fire \u2014 exempt from CDE",
+                  "effectiveness_rating": "ACCEPTABLE",
+                  "effectiveness_score": 0.836390668648378
+                }
+              ],
+              "eliminated": [
+                {
+                  "id": "GBU-16",
+                  "reason": "not deliverable by F-16"
+                },
+                {
+                  "id": "GBU-10",
+                  "reason": "not deliverable by F-16"
+                },
+                {
+                  "id": "GBU-38",
+                  "reason": "TLE CAT_III (30m) > required 10m"
+                },
+                {
+                  "id": "GBU-32",
+                  "reason": "not on aircraft loadout"
+                },
+                {
+                  "id": "GBU-31",
+                  "reason": "not on aircraft loadout"
+                },
+                {
+                  "id": "GBU-54",
+                  "reason": "not on aircraft loadout"
+                },
+                {
+                  "id": "GBU-39",
+                  "reason": "TLE CAT_III (30m) > required 10m"
+                },
+                {
+                  "id": "GBU-39_FLM",
+                  "reason": "not on aircraft loadout"
+                },
+                {
+                  "id": "AGM-114K",
+                  "reason": "not deliverable by F-16"
+                },
+                {
+                  "id": "AGM-114N",
+                  "reason": "not deliverable by F-16"
+                },
+                {
+                  "id": "AGM-114R",
+                  "reason": "not deliverable by F-16"
+                },
+                {
+                  "id": "AGM-65D",
+                  "reason": "not on aircraft loadout"
+                },
+                {
+                  "id": "AGM-65L",
+                  "reason": "not deliverable by F-16"
+                },
+                {
+                  "id": "APKWS",
+                  "reason": "not deliverable by F-16"
+                },
+                {
+                  "id": "GAU-8",
+                  "reason": "not deliverable by F-16"
+                }
+              ]
+            },
+            "nine_line": {
+              "line_1_ip": {
+                "value": "IP NORTH",
+                "filled_by": "jtac_runtime"
+              },
+              "line_2_heading": {
+                "value_deg_magnetic": 298,
+                "filled_by": "computed"
+              },
+              "line_3_distance": {
+                "value": 2.4,
+                "units": "NM",
+                "filled_by": "computed"
+              },
+              "line_4": {
+                "value": 1247,
+                "units": "ft",
+                "datum": "MSL",
+                "mandatory_readback": true
+              },
+              "line_5": {
+                "value": "Light skinned vehicle (technical) with mounted weapon",
+                "target_class": "vehicle_wheeled_soft",
+                "movement_state": "stationary"
+              },
+              "line_6": {
+                "format": "MGRS",
+                "value": "18T WL 85800 12100",
+                "datum": "WGS-84",
+                "tle_category": "CAT_III",
+                "mandatory_readback": true
+              },
+              "line_7": {
+                "mark_type": "laser",
+                "value": "Drone laser, code 1688",
+                "prf_code": "1688",
+                "backup_mark": {
+                  "mark_type": "ir_pointer",
+                  "value": "IR pointer (SPARKLE) \u2014 backup"
+                }
+              },
+              "line_8": {
+                "value": "SE 259 m, dug-in",
+                "direction": "SE",
+                "distance_m": 259
+              },
+              "line_9": {
+                "value": "Egress NW, climb to 8000 ft MSL",
+                "direction": "NW"
+              }
+            },
+            "remarks": [
+              {
+                "text": "LTL 118\u00b0M",
+                "type": "remark",
+                "mandatory_readback": false
+              }
+            ],
+            "restrictions": [
+              {
+                "text": "FAH 128-178 clockwise (laser cone)",
+                "type": "restriction",
+                "mandatory_readback": true
+              },
+              {
+                "text": "DANGER CLOSE \u2014 friendlies inside GBU-12 RED (259m vs 275m); GFC initials required",
+                "type": "restriction",
+                "mandatory_readback": true
+              },
+              {
+                "text": "FAH parallel to friendly axis 045\u00b0 \u00b1 30\u00b0",
+                "type": "restriction",
+                "mandatory_readback": true
+              },
+              {
+                "text": "TOT push when ready",
+                "type": "restriction",
+                "mandatory_readback": true
+              }
+            ],
+            "reasoning_trace": [
+              {
+                "tree": "Tree 1 \u2014 Engageability",
+                "status": "passed",
+                "text": "Hostile vehicle_wheeled_soft, PID 0.94 \u2265 0.8, position fix CAT_III, ROE-approved. PASSED."
+              },
+              {
+                "tree": "Tree 2 \u2014 Munition",
+                "status": "flagged",
+                "text": "Stage 0 movement gate: moving/movable \u2192 laser/IIR primary family (Collen CF-1.3). 2 candidates after hard filter (15 eliminated). Top: GBU-12 (PREFERRED, score 1.21), flags: DANGER_CLOSE."
+              },
+              {
+                "tree": "Tree 3 \u2014 Control",
+                "status": "passed",
+                "text": "Drone-fed CAS + JTAC remote \u2192 Type 2 default. Drone serves as remote sensor (JP 3-09.3 III-45)."
+              },
+              {
+                "tree": "Tree 4 \u2014 Mark",
+                "status": "passed",
+                "text": "Laser-guided weapon \u2192 drone laser primary, PRF 1688."
+              },
+              {
+                "tree": "Tree 5 \u2014 IP/Egress",
+                "status": "passed",
+                "text": "Egress NW (298\u00b0) \u2014 opposite friendly bearing. Attack heading 298\u00b0M."
+              },
+              {
+                "tree": "Tree 6 \u2014 Restrictions",
+                "status": "flagged",
+                "text": "1 remarks + 4 restrictions. Danger close active."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "target_id": "NYC.2",
+      "track": {
+        "lat": 40.7607,
+        "lon": -73.987,
+        "callsign": "Dismounted Squad N"
+      },
+      "options": [
+        {
+          "role": "primary",
+          "recommendation": {
+            "engageability": "ENGAGEABLE",
+            "target_id": "NYC.2",
+            "target_classification": "Dismounted infantry x4",
+            "target_class": "personnel_concentrated",
+            "cnn_confidence": 0.88,
+            "flags": [],
+            "routing": {
+              "chain": [
+                "system_generated",
+                "jtac_review",
+                "gfc_approval",
+                "aircrew_transmit"
+              ],
+              "current_step": "jtac_review",
+              "next_recipient": "jtac",
+              "final_approver": "gfc",
+              "requires_gfc_initials": false
+            },
+            "game_plan": {
+              "control_type": "Type_2",
+              "method_of_attack": "BOT",
+              "clearance_call_phrase": "CLEARED HOT",
+              "abort_call_phrase": "ABORT, ABORT, ABORT"
+            },
+            "munition": {
+              "primary": {
+                "id": "GBU-12",
+                "name": "GBU-12 Paveway II",
+                "guidance": "laser",
+                "warhead_lb": 500,
+                "red_standing_m": 275,
+                "tle_required_m": 30,
+                "fuze": "nose",
+                "count": 2,
+                "effectiveness_rating": "PREFERRED",
+                "effectiveness_score": 1.2583096364810038
+              },
+              "alternatives": [],
+              "eliminated": [
+                {
+                  "id": "GBU-16",
+                  "reason": "not deliverable by F-16"
+                },
+                {
+                  "id": "GBU-10",
+                  "reason": "not deliverable by F-16"
+                },
+                {
+                  "id": "GBU-38",
+                  "reason": "TLE CAT_III (30m) > required 10m"
+                },
+                {
+                  "id": "GBU-32",
+                  "reason": "not on aircraft loadout"
+                },
+                {
+                  "id": "GBU-31",
+                  "reason": "not on aircraft loadout"
+                },
+                {
+                  "id": "GBU-54",
+                  "reason": "not on aircraft loadout"
+                },
+                {
+                  "id": "GBU-39",
+                  "reason": "TLE CAT_III (30m) > required 10m"
+                },
+                {
+                  "id": "GBU-39_FLM",
+                  "reason": "not on aircraft loadout"
+                },
+                {
+                  "id": "AGM-114K",
+                  "reason": "not deliverable by F-16"
+                },
+                {
+                  "id": "AGM-114N",
+                  "reason": "not deliverable by F-16"
+                },
+                {
+                  "id": "AGM-114R",
+                  "reason": "not deliverable by F-16"
+                },
+                {
+                  "id": "AGM-65D",
+                  "reason": "not on aircraft loadout"
+                },
+                {
+                  "id": "AGM-65L",
+                  "reason": "not deliverable by F-16"
+                },
+                {
+                  "id": "APKWS",
+                  "reason": "not deliverable by F-16"
+                },
+                {
+                  "id": "GAU-8",
+                  "reason": "not deliverable by F-16"
+                },
+                {
+                  "id": "gun_20mm",
+                  "reason": "NOT_REC vs personnel_concentrated"
+                }
+              ]
+            },
+            "nine_line": {
+              "line_1_ip": {
+                "value": "IP NORTH",
+                "filled_by": "jtac_runtime"
+              },
+              "line_2_heading": {
+                "value_deg_magnetic": 290,
+                "filled_by": "computed"
+              },
+              "line_3_distance": {
+                "value": 2.4,
+                "units": "NM",
+                "filled_by": "computed"
+              },
+              "line_4": {
+                "value": 1234,
+                "units": "ft",
+                "datum": "MSL",
+                "mandatory_readback": true
+              },
+              "line_5": {
+                "value": "Dismounted infantry x4",
+                "target_class": "personnel_concentrated",
+                "movement_state": "slow"
+              },
+              "line_6": {
+                "format": "MGRS",
+                "value": "18T WL 85675 12400",
+                "datum": "WGS-84",
+                "tle_category": "CAT_III",
+                "mandatory_readback": true
+              },
+              "line_7": {
+                "mark_type": "laser",
+                "value": "Drone laser, code 1688",
+                "prf_code": "1688",
+                "backup_mark": {
+                  "mark_type": "ir_pointer",
+                  "value": "IR pointer (SPARKLE) \u2014 backup"
+                }
+              },
+              "line_8": {
+                "value": "E 541 m, dug-in",
+                "direction": "E",
+                "distance_m": 541
+              },
+              "line_9": {
+                "value": "Egress W, climb to 8000 ft MSL",
+                "direction": "W"
+              }
+            },
+            "remarks": [
+              {
+                "text": "LTL 110\u00b0M",
+                "type": "remark",
+                "mandatory_readback": false
+              },
+              {
+                "text": "Moving target: 4 kts hdg 90\u00b0, time stamp 11:22Z",
+                "type": "remark",
+                "mandatory_readback": false
+              }
+            ],
+            "restrictions": [
+              {
+                "text": "FAH 120-170 clockwise (laser cone)",
+                "type": "restriction",
+                "mandatory_readback": true
+              },
+              {
+                "text": "TOT push when ready",
+                "type": "restriction",
+                "mandatory_readback": true
+              }
+            ],
+            "reasoning_trace": [
+              {
+                "tree": "Tree 1 \u2014 Engageability",
+                "status": "passed",
+                "text": "Hostile personnel_concentrated, PID 0.88 \u2265 0.85, position fix CAT_III, ROE-approved. PASSED."
+              },
+              {
+                "tree": "Tree 2 \u2014 Munition",
+                "status": "passed",
+                "text": "Stage 0 movement gate: moving/movable \u2192 laser/IIR primary family (Collen CF-1.3). 1 candidates after hard filter (16 eliminated). Top: GBU-12 (PREFERRED, score 1.26)."
+              },
+              {
+                "tree": "Tree 3 \u2014 Control",
+                "status": "passed",
+                "text": "Drone-fed CAS + JTAC remote \u2192 Type 2 default. Drone serves as remote sensor (JP 3-09.3 III-45)."
+              },
+              {
+                "tree": "Tree 4 \u2014 Mark",
+                "status": "passed",
+                "text": "Laser-guided weapon \u2192 drone laser primary, PRF 1688."
+              },
+              {
+                "tree": "Tree 5 \u2014 IP/Egress",
+                "status": "passed",
+                "text": "Egress W (290\u00b0) \u2014 opposite friendly bearing. Attack heading 290\u00b0M."
+              },
+              {
+                "tree": "Tree 6 \u2014 Restrictions",
+                "status": "passed",
+                "text": "2 remarks + 2 restrictions. No danger close."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "target_id": "NYC.3",
+      "track": {
+        "lat": 40.7634,
+        "lon": -73.9885,
+        "callsign": "Dismounted Pair NW"
+      },
+      "options": [
+        {
+          "role": "primary",
+          "recommendation": {
+            "engageability": "NOT_ENGAGEABLE",
+            "flags": [
+              "INSUFFICIENT_PID",
+              "LOW_CONFIDENCE"
+            ],
+            "block_reasons": [
+              "PID confidence 0.81 below 0.85 (personnel)"
+            ],
+            "target_id": "NYC.3",
+            "reasoning_trace": [
+              {
+                "tree": "Tree 1 \u2014 Engageability",
+                "status": "blocked",
+                "text": "PID confidence 0.81 < 0.85 threshold for personnel. Single-source FMV insufficient (JFO ATTP \u00b61-136). NOT ENGAGEABLE \u2014 surfaces to JTAC."
+              }
+            ],
+            "routing": {
+              "current_step": "closed_not_engaged",
+              "chain": [
+                "system_generated",
+                "jtac_review",
+                "closed_not_engaged"
+              ],
+              "next_recipient": "jtac",
+              "final_approver": null
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "replace_scenario": true
+}
