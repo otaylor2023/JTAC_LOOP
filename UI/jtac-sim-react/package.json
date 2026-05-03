@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "bench:tree": "node scripts/benchmark-decision-tree.mjs",
+    "lv:tree": "node ../../scripts/lv-bridge-to-tree.mjs"
   },
   "dependencies": {
     "leaflet": "^1.9.4",

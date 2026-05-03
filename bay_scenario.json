@@ -1,0 +1,123 @@
+{
+  "scenario": "Bay Area ISR Demo",
+  "description": "Toy detection feed simulating a drone ISR mission over the Bay Area. Friendlies are US forces, hostiles are OPFOR. Detections appear, move, disappear, and reappear across frames.",
+  "frame_interval_sec": 2.0,
+  "frames": [
+    {
+      "frame": 0,
+      "t_sec": 0,
+      "detections": [
+        {"uid": "friendly-01", "callsign": "ALPHA-1",    "classification": "friendly", "confidence": 0.97, "lat": 37.7749,  "lon": -122.4194, "note": "SF downtown, stationary patrol"},
+        {"uid": "friendly-02", "callsign": "ALPHA-2",    "classification": "friendly", "confidence": 0.95, "lat": 37.8044,  "lon": -122.2712, "note": "Oakland, moving south"},
+        {"uid": "hostile-01",  "callsign": "OPFOR-01",   "classification": "hostile",  "confidence": 0.88, "lat": 37.6879,  "lon": -122.4702, "note": "SFO area, heading north"},
+        {"uid": "unknown-01",  "callsign": "UNK-01",     "classification": "unknown",  "confidence": 0.61, "lat": 37.7397,  "lon": -122.4758, "note": "Daly City, unclear"}
+      ]
+    },
+    {
+      "frame": 1,
+      "t_sec": 2,
+      "detections": [
+        {"uid": "friendly-01", "callsign": "ALPHA-1",    "classification": "friendly", "confidence": 0.97, "lat": 37.7749,  "lon": -122.4194, "note": "stationary"},
+        {"uid": "friendly-02", "callsign": "ALPHA-2",    "classification": "friendly", "confidence": 0.95, "lat": 37.7980,  "lon": -122.2750, "note": "moving south"},
+        {"uid": "hostile-01",  "callsign": "OPFOR-01",   "classification": "hostile",  "confidence": 0.91, "lat": 37.6950,  "lon": -122.4650, "note": "moving north"},
+        {"uid": "unknown-01",  "callsign": "UNK-01",     "classification": "unknown",  "confidence": 0.55, "lat": 37.7410,  "lon": -122.4780, "note": "slow drift west"}
+      ]
+    },
+    {
+      "frame": 2,
+      "t_sec": 4,
+      "detections": [
+        {"uid": "friendly-01", "callsign": "ALPHA-1",    "classification": "friendly", "confidence": 0.97, "lat": 37.7749,  "lon": -122.4194, "note": "stationary"},
+        {"uid": "friendly-02", "callsign": "ALPHA-2",    "classification": "friendly", "confidence": 0.94, "lat": 37.7900,  "lon": -122.2800, "note": "continuing south"},
+        {"uid": "hostile-01",  "callsign": "OPFOR-01",   "classification": "hostile",  "confidence": 0.93, "lat": 37.7050,  "lon": -122.4580, "note": "accelerating north"},
+        {"uid": "hostile-02",  "callsign": "OPFOR-02",   "classification": "hostile",  "confidence": 0.79, "lat": 37.7200,  "lon": -122.5000, "note": "new detection, coast side"},
+        {"uid": "unknown-01",  "callsign": "UNK-01",     "classification": "unknown",  "confidence": 0.49, "lat": 37.7420,  "lon": -122.4810, "note": "fading confidence"}
+      ]
+    },
+    {
+      "frame": 3,
+      "t_sec": 6,
+      "detections": [
+        {"uid": "friendly-01", "callsign": "ALPHA-1",    "classification": "friendly", "confidence": 0.97, "lat": 37.7755,  "lon": -122.4190, "note": "slight movement"},
+        {"uid": "friendly-02", "callsign": "ALPHA-2",    "classification": "friendly", "confidence": 0.93, "lat": 37.7820,  "lon": -122.2860, "note": "continuing south"},
+        {"uid": "hostile-01",  "callsign": "OPFOR-01",   "classification": "hostile",  "confidence": 0.94, "lat": 37.7150,  "lon": -122.4510, "note": "approaching SF"},
+        {"uid": "hostile-02",  "callsign": "OPFOR-02",   "classification": "hostile",  "confidence": 0.85, "lat": 37.7280,  "lon": -122.4920, "note": "moving northeast"}
+      ]
+    },
+    {
+      "frame": 4,
+      "t_sec": 8,
+      "detections": [
+        {"uid": "friendly-01", "callsign": "ALPHA-1",    "classification": "friendly", "confidence": 0.97, "lat": 37.7760,  "lon": -122.4185, "note": "slow patrol movement"},
+        {"uid": "friendly-03", "callsign": "ALPHA-3",    "classification": "friendly", "confidence": 0.91, "lat": 37.8715,  "lon": -122.2730, "note": "new friendly, Berkeley hills"},
+        {"uid": "hostile-01",  "callsign": "OPFOR-01",   "classification": "hostile",  "confidence": 0.96, "lat": 37.7280,  "lon": -122.4430, "note": "high confidence, closing fast"},
+        {"uid": "hostile-02",  "callsign": "OPFOR-02",   "classification": "hostile",  "confidence": 0.88, "lat": 37.7380,  "lon": -122.4820, "note": "converging toward OPFOR-01"}
+      ]
+    },
+    {
+      "frame": 5,
+      "t_sec": 10,
+      "detections": [
+        {"uid": "friendly-01", "callsign": "ALPHA-1",    "classification": "friendly", "confidence": 0.97, "lat": 37.7762,  "lon": -122.4182, "note": "holding position"},
+        {"uid": "friendly-03", "callsign": "ALPHA-3",    "classification": "friendly", "confidence": 0.92, "lat": 37.8690,  "lon": -122.2750, "note": "moving south slowly"},
+        {"uid": "hostile-01",  "callsign": "OPFOR-01",   "classification": "hostile",  "confidence": 0.97, "lat": 37.7400,  "lon": -122.4380, "note": "entering engagement zone"},
+        {"uid": "hostile-02",  "callsign": "OPFOR-02",   "classification": "hostile",  "confidence": 0.90, "lat": 37.7450,  "lon": -122.4700, "note": "flanking movement"}
+      ]
+    },
+    {
+      "frame": 6,
+      "t_sec": 12,
+      "detections": [
+        {"uid": "friendly-01", "callsign": "ALPHA-1",    "classification": "friendly", "confidence": 0.97, "lat": 37.7762,  "lon": -122.4182, "note": "holding"},
+        {"uid": "friendly-02", "callsign": "ALPHA-2",    "classification": "friendly", "confidence": 0.90, "lat": 37.7600,  "lon": -122.3100, "note": "reappears moving west"},
+        {"uid": "friendly-03", "callsign": "ALPHA-3",    "classification": "friendly", "confidence": 0.91, "lat": 37.8650,  "lon": -122.2780, "note": "still moving south"},
+        {"uid": "hostile-01",  "callsign": "OPFOR-01",   "classification": "hostile",  "confidence": 0.95, "lat": 37.7500,  "lon": -122.4310, "note": "slowing, possible halt"},
+        {"uid": "hostile-02",  "callsign": "OPFOR-02",   "classification": "hostile",  "confidence": 0.87, "lat": 37.7510,  "lon": -122.4620, "note": "converging on OPFOR-01"}
+      ]
+    },
+    {
+      "frame": 7,
+      "t_sec": 14,
+      "detections": [
+        {"uid": "friendly-01", "callsign": "ALPHA-1",    "classification": "friendly", "confidence": 0.97, "lat": 37.7762,  "lon": -122.4182, "note": "holding"},
+        {"uid": "friendly-02", "callsign": "ALPHA-2",    "classification": "friendly", "confidence": 0.91, "lat": 37.7580,  "lon": -122.3200, "note": "moving west"},
+        {"uid": "hostile-02",  "callsign": "OPFOR-02",   "classification": "hostile",  "confidence": 0.89, "lat": 37.7520,  "lon": -122.4550, "note": "OPFOR-01 lost, OPFOR-02 still tracked"},
+        {"uid": "unknown-02",  "callsign": "UNK-02",     "classification": "unknown",  "confidence": 0.58, "lat": 37.6600,  "lon": -122.3800, "note": "new unknown south of SFO"}
+      ]
+    },
+    {
+      "frame": 8,
+      "t_sec": 16,
+      "detections": [
+        {"uid": "friendly-01", "callsign": "ALPHA-1",    "classification": "friendly", "confidence": 0.97, "lat": 37.7762,  "lon": -122.4182, "note": "holding"},
+        {"uid": "friendly-02", "callsign": "ALPHA-2",    "classification": "friendly", "confidence": 0.92, "lat": 37.7560,  "lon": -122.3350, "note": "moving west"},
+        {"uid": "hostile-01",  "callsign": "OPFOR-01",   "classification": "hostile",  "confidence": 0.82, "lat": 37.7560,  "lon": -122.4280, "note": "reacquired, changed direction"},
+        {"uid": "hostile-02",  "callsign": "OPFOR-02",   "classification": "hostile",  "confidence": 0.91, "lat": 37.7530,  "lon": -122.4480, "note": "holding near OPFOR-01"},
+        {"uid": "unknown-02",  "callsign": "UNK-02",     "classification": "unknown",  "confidence": 0.65, "lat": 37.6650,  "lon": -122.3750, "note": "confidence increasing"}
+      ]
+    },
+    {
+      "frame": 9,
+      "t_sec": 18,
+      "detections": [
+        {"uid": "friendly-01", "callsign": "ALPHA-1",    "classification": "friendly", "confidence": 0.97, "lat": 37.7765,  "lon": -122.4178, "note": "beginning to move"},
+        {"uid": "friendly-02", "callsign": "ALPHA-2",    "classification": "friendly", "confidence": 0.93, "lat": 37.7545,  "lon": -122.3500, "note": "approaching SF"},
+        {"uid": "friendly-03", "callsign": "ALPHA-3",    "classification": "friendly", "confidence": 0.90, "lat": 37.8200,  "lon": -122.3100, "note": "moved significantly south"},
+        {"uid": "hostile-01",  "callsign": "OPFOR-01",   "classification": "hostile",  "confidence": 0.93, "lat": 37.7600,  "lon": -122.4200, "note": "moving northeast"},
+        {"uid": "hostile-02",  "callsign": "OPFOR-02",   "classification": "hostile",  "confidence": 0.92, "lat": 37.7580,  "lon": -122.4380, "note": "following OPFOR-01"},
+        {"uid": "unknown-02",  "callsign": "UNK-02",     "classification": "hostile",  "confidence": 0.81, "lat": 37.6720,  "lon": -122.3680, "note": "reclassified hostile"}
+      ]
+    },
+    {
+      "frame": 10,
+      "t_sec": 20,
+      "detections": [
+        {"uid": "friendly-01", "callsign": "ALPHA-1",    "classification": "friendly", "confidence": 0.97, "lat": 37.7770,  "lon": -122.4170, "note": "moving toward hostiles"},
+        {"uid": "friendly-02", "callsign": "ALPHA-2",    "classification": "friendly", "confidence": 0.94, "lat": 37.7530,  "lon": -122.3650, "note": "converging"},
+        {"uid": "friendly-03", "callsign": "ALPHA-3",    "classification": "friendly", "confidence": 0.91, "lat": 37.8000,  "lon": -122.3400, "note": "moving southwest"},
+        {"uid": "hostile-02",  "callsign": "OPFOR-02",   "classification": "hostile",  "confidence": 0.88, "lat": 37.7610,  "lon": -122.4300, "note": "OPFOR-01 lost again"},
+        {"uid": "unknown-02",  "callsign": "UNK-02",     "classification": "hostile",  "confidence": 0.85, "lat": 37.6800,  "lon": -122.3600, "note": "moving north"}
+      ]
+    }
+  ]
+}

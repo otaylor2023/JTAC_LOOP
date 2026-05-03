@@ -1,0 +1,523 @@
+{
+  "scenario": "Central Iran plateau ISR Demo",
+  "description": "Toy detection feed over open desert east of Isfahan (Iran). Same motion script as bay_scenario; coordinates shifted to central Iran (WGS-84).",
+  "frame_interval_sec": 2.0,
+  "frames": [
+    {
+      "frame": 0,
+      "t_sec": 0,
+      "detections": [
+        {
+          "uid": "friendly-01",
+          "callsign": "ALPHA-1",
+          "classification": "friendly",
+          "confidence": 0.97,
+          "lat": 32.58,
+          "lon": 52.45,
+          "note": "Isfahan corridor staging, stationary patrol"
+        },
+        {
+          "uid": "friendly-02",
+          "callsign": "ALPHA-2",
+          "classification": "friendly",
+          "confidence": 0.95,
+          "lat": 32.6095,
+          "lon": 52.5982,
+          "note": "Yazd road fringe, moving south"
+        },
+        {
+          "uid": "hostile-01",
+          "callsign": "OPFOR-01",
+          "classification": "hostile",
+          "confidence": 0.88,
+          "lat": 32.493,
+          "lon": 52.3992,
+          "note": "north plateau approach, heading north"
+        },
+        {
+          "uid": "unknown-01",
+          "callsign": "UNK-01",
+          "classification": "unknown",
+          "confidence": 0.61,
+          "lat": 32.5448,
+          "lon": 52.3936,
+          "note": "Dasht-e Kavir margin, unclear"
+        }
+      ]
+    },
+    {
+      "frame": 1,
+      "t_sec": 2,
+      "detections": [
+        {
+          "uid": "friendly-01",
+          "callsign": "ALPHA-1",
+          "classification": "friendly",
+          "confidence": 0.97,
+          "lat": 32.58,
+          "lon": 52.45,
+          "note": "stationary"
+        },
+        {
+          "uid": "friendly-02",
+          "callsign": "ALPHA-2",
+          "classification": "friendly",
+          "confidence": 0.95,
+          "lat": 32.6031,
+          "lon": 52.5944,
+          "note": "moving south"
+        },
+        {
+          "uid": "hostile-01",
+          "callsign": "OPFOR-01",
+          "classification": "hostile",
+          "confidence": 0.91,
+          "lat": 32.5001,
+          "lon": 52.4044,
+          "note": "moving north"
+        },
+        {
+          "uid": "unknown-01",
+          "callsign": "UNK-01",
+          "classification": "unknown",
+          "confidence": 0.55,
+          "lat": 32.5461,
+          "lon": 52.3914,
+          "note": "slow drift west"
+        }
+      ]
+    },
+    {
+      "frame": 2,
+      "t_sec": 4,
+      "detections": [
+        {
+          "uid": "friendly-01",
+          "callsign": "ALPHA-1",
+          "classification": "friendly",
+          "confidence": 0.97,
+          "lat": 32.58,
+          "lon": 52.45,
+          "note": "stationary"
+        },
+        {
+          "uid": "friendly-02",
+          "callsign": "ALPHA-2",
+          "classification": "friendly",
+          "confidence": 0.94,
+          "lat": 32.5951,
+          "lon": 52.5894,
+          "note": "continuing south"
+        },
+        {
+          "uid": "hostile-01",
+          "callsign": "OPFOR-01",
+          "classification": "hostile",
+          "confidence": 0.93,
+          "lat": 32.5101,
+          "lon": 52.4114,
+          "note": "accelerating north"
+        },
+        {
+          "uid": "hostile-02",
+          "callsign": "OPFOR-02",
+          "classification": "hostile",
+          "confidence": 0.79,
+          "lat": 32.5251,
+          "lon": 52.3694,
+          "note": "new detection, open desert east of plateau"
+        },
+        {
+          "uid": "unknown-01",
+          "callsign": "UNK-01",
+          "classification": "unknown",
+          "confidence": 0.49,
+          "lat": 32.5471,
+          "lon": 52.3884,
+          "note": "fading confidence"
+        }
+      ]
+    },
+    {
+      "frame": 3,
+      "t_sec": 6,
+      "detections": [
+        {
+          "uid": "friendly-01",
+          "callsign": "ALPHA-1",
+          "classification": "friendly",
+          "confidence": 0.97,
+          "lat": 32.5806,
+          "lon": 52.4504,
+          "note": "slight movement"
+        },
+        {
+          "uid": "friendly-02",
+          "callsign": "ALPHA-2",
+          "classification": "friendly",
+          "confidence": 0.93,
+          "lat": 32.5871,
+          "lon": 52.5834,
+          "note": "continuing south"
+        },
+        {
+          "uid": "hostile-01",
+          "callsign": "OPFOR-01",
+          "classification": "hostile",
+          "confidence": 0.94,
+          "lat": 32.5201,
+          "lon": 52.4184,
+          "note": "closing toward Isfahan basin"
+        },
+        {
+          "uid": "hostile-02",
+          "callsign": "OPFOR-02",
+          "classification": "hostile",
+          "confidence": 0.85,
+          "lat": 32.5331,
+          "lon": 52.3774,
+          "note": "moving northeast"
+        }
+      ]
+    },
+    {
+      "frame": 4,
+      "t_sec": 8,
+      "detections": [
+        {
+          "uid": "friendly-01",
+          "callsign": "ALPHA-1",
+          "classification": "friendly",
+          "confidence": 0.97,
+          "lat": 32.5811,
+          "lon": 52.4509,
+          "note": "slow patrol movement"
+        },
+        {
+          "uid": "friendly-03",
+          "callsign": "ALPHA-3",
+          "classification": "friendly",
+          "confidence": 0.91,
+          "lat": 32.6766,
+          "lon": 52.5964,
+          "note": "new friendly, Zagros foothills line"
+        },
+        {
+          "uid": "hostile-01",
+          "callsign": "OPFOR-01",
+          "classification": "hostile",
+          "confidence": 0.96,
+          "lat": 32.5331,
+          "lon": 52.4264,
+          "note": "high confidence, closing fast"
+        },
+        {
+          "uid": "hostile-02",
+          "callsign": "OPFOR-02",
+          "classification": "hostile",
+          "confidence": 0.88,
+          "lat": 32.5431,
+          "lon": 52.3874,
+          "note": "converging toward OPFOR-01"
+        }
+      ]
+    },
+    {
+      "frame": 5,
+      "t_sec": 10,
+      "detections": [
+        {
+          "uid": "friendly-01",
+          "callsign": "ALPHA-1",
+          "classification": "friendly",
+          "confidence": 0.97,
+          "lat": 32.5813,
+          "lon": 52.4512,
+          "note": "holding position"
+        },
+        {
+          "uid": "friendly-03",
+          "callsign": "ALPHA-3",
+          "classification": "friendly",
+          "confidence": 0.92,
+          "lat": 32.6741,
+          "lon": 52.5944,
+          "note": "moving south slowly"
+        },
+        {
+          "uid": "hostile-01",
+          "callsign": "OPFOR-01",
+          "classification": "hostile",
+          "confidence": 0.97,
+          "lat": 32.5451,
+          "lon": 52.4314,
+          "note": "entering engagement zone"
+        },
+        {
+          "uid": "hostile-02",
+          "callsign": "OPFOR-02",
+          "classification": "hostile",
+          "confidence": 0.9,
+          "lat": 32.5501,
+          "lon": 52.3994,
+          "note": "flanking movement"
+        }
+      ]
+    },
+    {
+      "frame": 6,
+      "t_sec": 12,
+      "detections": [
+        {
+          "uid": "friendly-01",
+          "callsign": "ALPHA-1",
+          "classification": "friendly",
+          "confidence": 0.97,
+          "lat": 32.5813,
+          "lon": 52.4512,
+          "note": "holding"
+        },
+        {
+          "uid": "friendly-02",
+          "callsign": "ALPHA-2",
+          "classification": "friendly",
+          "confidence": 0.9,
+          "lat": 32.5651,
+          "lon": 52.5594,
+          "note": "reappears moving west"
+        },
+        {
+          "uid": "friendly-03",
+          "callsign": "ALPHA-3",
+          "classification": "friendly",
+          "confidence": 0.91,
+          "lat": 32.6701,
+          "lon": 52.5914,
+          "note": "still moving south"
+        },
+        {
+          "uid": "hostile-01",
+          "callsign": "OPFOR-01",
+          "classification": "hostile",
+          "confidence": 0.95,
+          "lat": 32.5551,
+          "lon": 52.4384,
+          "note": "slowing, possible halt"
+        },
+        {
+          "uid": "hostile-02",
+          "callsign": "OPFOR-02",
+          "classification": "hostile",
+          "confidence": 0.87,
+          "lat": 32.5561,
+          "lon": 52.4074,
+          "note": "converging on OPFOR-01"
+        }
+      ]
+    },
+    {
+      "frame": 7,
+      "t_sec": 14,
+      "detections": [
+        {
+          "uid": "friendly-01",
+          "callsign": "ALPHA-1",
+          "classification": "friendly",
+          "confidence": 0.97,
+          "lat": 32.5813,
+          "lon": 52.4512,
+          "note": "holding"
+        },
+        {
+          "uid": "friendly-02",
+          "callsign": "ALPHA-2",
+          "classification": "friendly",
+          "confidence": 0.91,
+          "lat": 32.5631,
+          "lon": 52.5494,
+          "note": "moving west"
+        },
+        {
+          "uid": "hostile-02",
+          "callsign": "OPFOR-02",
+          "classification": "hostile",
+          "confidence": 0.89,
+          "lat": 32.5571,
+          "lon": 52.4144,
+          "note": "OPFOR-01 lost, OPFOR-02 still tracked"
+        },
+        {
+          "uid": "unknown-02",
+          "callsign": "UNK-02",
+          "classification": "unknown",
+          "confidence": 0.58,
+          "lat": 32.4651,
+          "lon": 52.4894,
+          "note": "new unknown south toward Yazd highway"
+        }
+      ]
+    },
+    {
+      "frame": 8,
+      "t_sec": 16,
+      "detections": [
+        {
+          "uid": "friendly-01",
+          "callsign": "ALPHA-1",
+          "classification": "friendly",
+          "confidence": 0.97,
+          "lat": 32.5813,
+          "lon": 52.4512,
+          "note": "holding"
+        },
+        {
+          "uid": "friendly-02",
+          "callsign": "ALPHA-2",
+          "classification": "friendly",
+          "confidence": 0.92,
+          "lat": 32.5611,
+          "lon": 52.5344,
+          "note": "moving west"
+        },
+        {
+          "uid": "hostile-01",
+          "callsign": "OPFOR-01",
+          "classification": "hostile",
+          "confidence": 0.82,
+          "lat": 32.5611,
+          "lon": 52.4414,
+          "note": "reacquired, changed direction"
+        },
+        {
+          "uid": "hostile-02",
+          "callsign": "OPFOR-02",
+          "classification": "hostile",
+          "confidence": 0.91,
+          "lat": 32.5581,
+          "lon": 52.4214,
+          "note": "holding near OPFOR-01"
+        },
+        {
+          "uid": "unknown-02",
+          "callsign": "UNK-02",
+          "classification": "unknown",
+          "confidence": 0.65,
+          "lat": 32.4701,
+          "lon": 52.4944,
+          "note": "confidence increasing"
+        }
+      ]
+    },
+    {
+      "frame": 9,
+      "t_sec": 18,
+      "detections": [
+        {
+          "uid": "friendly-01",
+          "callsign": "ALPHA-1",
+          "classification": "friendly",
+          "confidence": 0.97,
+          "lat": 32.5816,
+          "lon": 52.4516,
+          "note": "beginning to move"
+        },
+        {
+          "uid": "friendly-02",
+          "callsign": "ALPHA-2",
+          "classification": "friendly",
+          "confidence": 0.93,
+          "lat": 32.5596,
+          "lon": 52.5194,
+          "note": "closing toward Isfahan basin"
+        },
+        {
+          "uid": "friendly-03",
+          "callsign": "ALPHA-3",
+          "classification": "friendly",
+          "confidence": 0.9,
+          "lat": 32.6251,
+          "lon": 52.5594,
+          "note": "moved significantly south"
+        },
+        {
+          "uid": "hostile-01",
+          "callsign": "OPFOR-01",
+          "classification": "hostile",
+          "confidence": 0.93,
+          "lat": 32.5651,
+          "lon": 52.4494,
+          "note": "moving northeast"
+        },
+        {
+          "uid": "hostile-02",
+          "callsign": "OPFOR-02",
+          "classification": "hostile",
+          "confidence": 0.92,
+          "lat": 32.5631,
+          "lon": 52.4314,
+          "note": "following OPFOR-01"
+        },
+        {
+          "uid": "unknown-02",
+          "callsign": "UNK-02",
+          "classification": "hostile",
+          "confidence": 0.81,
+          "lat": 32.4771,
+          "lon": 52.5014,
+          "note": "reclassified hostile"
+        }
+      ]
+    },
+    {
+      "frame": 10,
+      "t_sec": 20,
+      "detections": [
+        {
+          "uid": "friendly-01",
+          "callsign": "ALPHA-1",
+          "classification": "friendly",
+          "confidence": 0.97,
+          "lat": 32.5821,
+          "lon": 52.4524,
+          "note": "moving toward hostiles"
+        },
+        {
+          "uid": "friendly-02",
+          "callsign": "ALPHA-2",
+          "classification": "friendly",
+          "confidence": 0.94,
+          "lat": 32.5581,
+          "lon": 52.5044,
+          "note": "converging"
+        },
+        {
+          "uid": "friendly-03",
+          "callsign": "ALPHA-3",
+          "classification": "friendly",
+          "confidence": 0.91,
+          "lat": 32.6051,
+          "lon": 52.5294,
+          "note": "moving southwest"
+        },
+        {
+          "uid": "hostile-02",
+          "callsign": "OPFOR-02",
+          "classification": "hostile",
+          "confidence": 0.88,
+          "lat": 32.5661,
+          "lon": 52.4394,
+          "note": "OPFOR-01 lost again"
+        },
+        {
+          "uid": "unknown-02",
+          "callsign": "UNK-02",
+          "classification": "hostile",
+          "confidence": 0.85,
+          "lat": 32.4851,
+          "lon": 52.5094,
+          "note": "moving north"
+        }
+      ]
+    }
+  ]
+}

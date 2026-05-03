@@ -3,8 +3,8 @@
 // Inputs: { hostiles, friendlies, self, primaryTargetId, aircraft, weather, roe, time_of_day }
 // Output: structured recommendation matching DECISION_TREE/output_schema.json
 
-import { MUNITIONS, MUNITIONS_BY_ID, EFFECTIVENESS_RATINGS, effectivenessRating } from '../data/munitions';
-import { bearingDeg, distanceM, projectM, closestFriendly, friendlyDirectionFromTarget, approximateMGRS, bearingToCardinal } from './geo';
+import { MUNITIONS, MUNITIONS_BY_ID, EFFECTIVENESS_RATINGS, effectivenessRating } from '../data/munitions.js';
+import { bearingDeg, distanceM, projectM, closestFriendly, friendlyDirectionFromTarget, approximateMGRS, bearingToCardinal } from './geo.js';
 
 const PID_THRESHOLDS_BY_CLASS = { vehicle: 0.85, personnel: 0.92, structure: 0.85, default: 0.85 };
 
@@ -380,16 +380,47 @@ function restrictionEnumeration(state, munOutput, ctrlOutput, markOutput, ipOutp
   return { remarks, restrictions, trace };
 }
 
+function _nowMs() {
+  return typeof performance !== 'undefined' && typeof performance.now === 'function'
+    ? performance.now()
+    : Date.now();
+}
+
+function _profileSegments(marks) {
+  const segments = [];
+  for (let i = 1; i < marks.length; i++) {
+    segments.push({
+      name: marks[i].name,
+      ms: marks[i].t - marks[i - 1].t,
+    });
+  }
+  return {
+    wall_ms: marks.length > 1 ? marks[marks.length - 1].t - marks[0].t : 0,
+    segments,
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // TOP-LEVEL: assemble full structured recommendation
+// Optional `options.profile === true` attaches `_profile` with per-phase ms
+// (for benchmarks; default path has no measurable overhead beyond one branch).
 // ─────────────────────────────────────────────────────────────────────────
-export function recommend(input) {
+export function recommend(input, options = {}) {
+  const profile = options?.profile === true;
+  const marks = profile ? [{ name: 'start', t: _nowMs() }] : null;
+  const phaseMark = (name) => {
+    if (marks) marks.push({ name, t: _nowMs() });
+  };
+
   const { hostiles, friendlies, self, primaryTargetId, aircraft, weather, roe, time_of_day, user_heading } = input;
   const target = hostiles.find(h => h.id === primaryTargetId);
   if (!target) {
-    return { error: 'no_primary_target', engageability: 'NOT_ENGAGEABLE', flags: ['NO_PRIMARY_TARGET'], reasoning_trace: [] };
+    const err = { error: 'no_primary_target', engageability: 'NOT_ENGAGEABLE', flags: ['NO_PRIMARY_TARGET'], reasoning_trace: [] };
+    if (profile) err._profile = _profileSegments(marks);
+    return err;
   }
 
+  phaseMark('after_resolve_target');
   const closest = closestFriendly(target, friendlies);
   const state = {
     target, friendlies, self, aircraft, weather, roe, time_of_day, user_heading,
@@ -408,10 +439,13 @@ export function recommend(input) {
     drone_has_ir_pointer: input.drone_has_ir_pointer ?? true,
   };
 
+  phaseMark('after_state_build');
+
   // Tree 1
   const eng = engageabilityGate(state);
+  phaseMark('after_tree1');
   if (eng.engageability === 'NOT_ENGAGEABLE') {
-    return {
+    const out = {
       engageability: eng.engageability,
       flags: eng.flags,
       block_reasons: eng.block_reasons,
@@ -419,23 +453,32 @@ export function recommend(input) {
       reasoning_trace: eng.trace,
       routing: { current_step: 'closed_not_engaged', chain: ['system_generated', 'jtac_review', 'closed_not_engaged'], next_recipient: 'jtac', final_approver: null },
     };
+    if (profile) out._profile = _profileSegments(marks);
+    return out;
   }
 
   // Tree 2 → Tree 3 → Tree 4 → Tree 5 → Tree 6
   const mun = munitionSelection(state, eng);
+  phaseMark('after_tree2');
   if (!mun.munition) {
-    return {
+    const out = {
       engageability: 'NOT_ENGAGEABLE',
       flags: [...eng.flags, ...mun.flags],
       block_reasons: ['No viable munition'],
       target_id: target.id,
       reasoning_trace: [...eng.trace, ...mun.trace],
     };
+    if (profile) out._profile = _profileSegments(marks);
+    return out;
   }
   const ctrl = controlTypeSelection(state, eng, mun);
-  const mark = markMethod(state, mun, ctrl);
+  phaseMark('after_tree3');
+  const markOut = markMethod(state, mun, ctrl);
+  phaseMark('after_tree4');
   const ipEg = ipAndEgress(state, ctrl);
-  const restr = restrictionEnumeration(state, mun, ctrl, mark, ipEg);
+  phaseMark('after_tree5');
+  const restr = restrictionEnumeration(state, mun, ctrl, markOut, ipEg);
+  phaseMark('after_tree6');
 
   // Compose 9-line
   const targetElevationFt = Math.round((target.elevation_m ?? 380) * 3.28084);
@@ -487,17 +530,19 @@ export function recommend(input) {
       line_4: { value: targetElevationFt, units: 'ft', datum: 'MSL', mandatory_readback: true },
       line_5: { value: line5, target_class: target.target_class, movement_state: target.movement_state },
       line_6: { format: 'MGRS', value: mgrs, datum: 'WGS-84', tle_category: target.tle_category, mandatory_readback: true },
-      line_7: { mark_type: mark.mark_type, value: mark.value, prf_code: mark.prf_code, backup_mark: mark.backup },
+      line_7: { mark_type: markOut.mark_type, value: markOut.value, prf_code: markOut.prf_code, backup_mark: markOut.backup },
       line_8: { value: line8, direction: closest?.bearing_cardinal, distance_m: Math.round(closest?.distance_m ?? 0) },
       line_9: { value: ipEg.egress_value, direction: ipEg.egress_direction },
     },
     remarks: restr.remarks.map(t => ({ text: t, type: 'remark', mandatory_readback: false })),
     restrictions: restr.restrictions.map(t => ({ text: t, type: 'restriction', mandatory_readback: true })),
     reasoning_trace: [
-      ...eng.trace, ...mun.trace, ...ctrl.trace, ...mark.trace, ...ipEg.trace, ...restr.trace,
+      ...eng.trace, ...mun.trace, ...ctrl.trace, ...markOut.trace, ...ipEg.trace, ...restr.trace,
     ],
   };
 
+  phaseMark('after_compose');
+  if (profile) recommendation._profile = _profileSegments(marks);
   return recommendation;
 }
 

@@ -1,0 +1,118 @@
+{
+  "scenario": "Las Vegas dual-cluster CAS (intermediate)",
+  "description": "JTAC training maneuver: two hostile clusters ~3.5 km apart over desert NE of Las Vegas (Nellis / Lake Mead margin). Shaped after demo aircraft loadout in units.js (GBU-12×2, GBU-38×4, GBU-39×8) — enough weapons for multiple sequenced strikes, not one-shot. Cluster A = three stationary technicals (coordinate/laser viable). Cluster B = convoy + CP, slow movers (second problem set after Cluster A attrits). Friendly BLUE stays west of both. Unknown between clusters forces PID discipline.",
+  "single_run": true,
+  "wiggle_all_tracks": true,
+  "reset_before_play": true,
+  "reset_ui_before_linger": true,
+  "reset_ui_pause_sec": 0.5,
+  "linger_forever": true,
+  "wiggle_circle_radius_m_play": 455,
+  "wiggle_circle_radius_m_linger": 580,
+  "wiggle_omega_scale": 0.28,
+  "linger_interval_sec": 3.25,
+  "linger_stale_seconds": 86400,
+  "sync_stale_seconds": 720,
+  "frame_interval_sec": 18.0,
+  "post_clear_sleep_sec": 2,
+  "frames": [
+    {
+      "frame": 0,
+      "t_sec": 0,
+      "detections": [
+        {"uid": "friendly-01", "callsign": "BLUE-1", "classification": "friendly", "confidence": 0.98, "lat": 36.208, "lon": -115.082, "note": "JTAC staging · west of both clusters"},
+        {"uid": "friendly-02", "callsign": "BLUE-2", "classification": "friendly", "confidence": 0.96, "lat": 36.214, "lon": -115.098, "note": "Screen position · I-15 / 93 corridor"},
+        {"uid": "cluster-a-1", "callsign": "TRUCK-N", "classification": "hostile", "confidence": 0.93, "lat": 36.2175, "lon": -115.0915, "note": "CLUSTER A (NW) · lead technical · stationary"},
+        {"uid": "cluster-a-2", "callsign": "TRUCK-S", "classification": "hostile", "confidence": 0.91, "lat": 36.2192, "lon": -115.0888, "note": "CLUSTER A · second technical · stationary"},
+        {"uid": "cluster-a-3", "callsign": "BUGGY-1", "classification": "hostile", "confidence": 0.89, "lat": 36.2168, "lon": -115.0865, "note": "CLUSTER A · light buggy · stationary"},
+        {"uid": "unk-cee", "callsign": "UNK-CEE", "classification": "unknown", "confidence": 0.62, "lat": 36.195, "lon": -115.07, "note": "Between clusters · PID before strike"}
+      ]
+    },
+    {
+      "frame": 1,
+      "t_sec": 30,
+      "detections": [
+        {"uid": "friendly-01", "callsign": "BLUE-1", "classification": "friendly", "confidence": 0.98, "lat": 36.208, "lon": -115.082, "note": "JTAC staging"},
+        {"uid": "friendly-02", "callsign": "BLUE-2", "classification": "friendly", "confidence": 0.96, "lat": 36.214, "lon": -115.098, "note": "Screen position"},
+        {"uid": "cluster-a-1", "callsign": "TRUCK-N", "classification": "hostile", "confidence": 0.94, "lat": 36.2175, "lon": -115.0915, "note": "CLUSTER A · PID tightened"},
+        {"uid": "cluster-a-2", "callsign": "TRUCK-S", "classification": "hostile", "confidence": 0.92, "lat": 36.2192, "lon": -115.0888, "note": "CLUSTER A"},
+        {"uid": "cluster-a-3", "callsign": "BUGGY-1", "classification": "hostile", "confidence": 0.9, "lat": 36.2168, "lon": -115.0865, "note": "CLUSTER A"},
+        {"uid": "cluster-b-1", "callsign": "CONVOY-1", "classification": "hostile", "confidence": 0.9, "lat": 36.1725, "lon": -115.051, "note": "CLUSTER B (SE) · convoy lead · slow north"},
+        {"uid": "cluster-b-2", "callsign": "CONVOY-2", "classification": "hostile", "confidence": 0.88, "lat": 36.1708, "lon": -115.0485, "note": "CLUSTER B · second vehicle · slow north"},
+        {"uid": "cluster-b-3", "callsign": "CP-PICKUP", "classification": "hostile", "confidence": 0.86, "lat": 36.1695, "lon": -115.0525, "note": "CLUSTER B · CP / pickup · stationary"},
+        {"uid": "unk-cee", "callsign": "UNK-CEE", "classification": "unknown", "confidence": 0.58, "lat": 36.195, "lon": -115.07, "note": "Still unknown · deconflict before BDA"}
+      ]
+    },
+    {
+      "frame": 2,
+      "t_sec": 60,
+      "detections": [
+        {"uid": "friendly-01", "callsign": "BLUE-1", "classification": "friendly", "confidence": 0.98, "lat": 36.208, "lon": -115.082, "note": "JTAC staging"},
+        {"uid": "friendly-02", "callsign": "BLUE-2", "classification": "friendly", "confidence": 0.96, "lat": 36.214, "lon": -115.098, "note": "Screen"},
+        {"uid": "cluster-a-1", "callsign": "TRUCK-N", "classification": "hostile", "confidence": 0.94, "lat": 36.2175, "lon": -115.0915, "note": "CLUSTER A · post first strike · BDA pending"},
+        {"uid": "cluster-a-2", "callsign": "TRUCK-S", "classification": "hostile", "confidence": 0.92, "lat": 36.2192, "lon": -115.0888, "note": "CLUSTER A"},
+        {"uid": "cluster-b-1", "callsign": "CONVOY-1", "classification": "hostile", "confidence": 0.91, "lat": 36.176, "lon": -115.0495, "note": "CLUSTER B · closing gap to Cluster A axis"},
+        {"uid": "cluster-b-2", "callsign": "CONVOY-2", "classification": "hostile", "confidence": 0.89, "lat": 36.1742, "lon": -115.047, "note": "CLUSTER B"},
+        {"uid": "cluster-b-3", "callsign": "CP-PICKUP", "classification": "hostile", "confidence": 0.87, "lat": 36.1695, "lon": -115.0525, "note": "CLUSTER B · CP holding"},
+        {"uid": "unk-cee", "callsign": "UNK-CEE", "classification": "hostile", "confidence": 0.82, "lat": 36.195, "lon": -115.07, "note": "Reclassified hostile · tied to Cluster B axis"}
+      ]
+    },
+    {
+      "frame": 3,
+      "t_sec": 90,
+      "detections": [
+        {"uid": "friendly-01", "callsign": "BLUE-1", "classification": "friendly", "confidence": 0.98, "lat": 36.208, "lon": -115.082, "note": "JTAC staging"},
+        {"uid": "friendly-02", "callsign": "BLUE-2", "classification": "friendly", "confidence": 0.96, "lat": 36.214, "lon": -115.098, "note": "Screen"},
+        {"uid": "cluster-a-1", "callsign": "TRUCK-N", "classification": "hostile", "confidence": 0.95, "lat": 36.2175, "lon": -115.0915, "note": "CLUSTER A · last A-group holdout · multi-strike round 2?"},
+        {"uid": "cluster-b-1", "callsign": "CONVOY-1", "classification": "hostile", "confidence": 0.92, "lat": 36.1795, "lon": -115.048, "note": "CLUSTER B · primary mover · laser window"},
+        {"uid": "cluster-b-2", "callsign": "CONVOY-2", "classification": "hostile", "confidence": 0.9, "lat": 36.1775, "lon": -115.0455, "note": "CLUSTER B"},
+        {"uid": "cluster-b-3", "callsign": "CP-PICKUP", "classification": "hostile", "confidence": 0.88, "lat": 36.1695, "lon": -115.0525, "note": "CLUSTER B · JDAM candidate if CAT-I mensuration"}
+      ]
+    },
+    {
+      "frame": 4,
+      "t_sec": 120,
+      "detections": [
+        {"uid": "friendly-01", "callsign": "BLUE-1", "classification": "friendly", "confidence": 0.98, "lat": 36.208, "lon": -115.082, "note": "JTAC staging"},
+        {"uid": "friendly-02", "callsign": "BLUE-2", "classification": "friendly", "confidence": 0.96, "lat": 36.214, "lon": -115.098, "note": "Screen"},
+        {"uid": "cluster-b-1", "callsign": "CONVOY-1", "classification": "hostile", "confidence": 0.93, "lat": 36.1825, "lon": -115.0465, "note": "CLUSTER B only · A cleared · sequenced strike phase"},
+        {"uid": "cluster-b-2", "callsign": "CONVOY-2", "classification": "hostile", "confidence": 0.91, "lat": 36.1805, "lon": -115.044, "note": "CLUSTER B · convoy tightening"},
+        {"uid": "cluster-b-3", "callsign": "CP-PICKUP", "classification": "hostile", "confidence": 0.89, "lat": 36.171, "lon": -115.051, "note": "CLUSTER B · CP displaced north"}
+      ]
+    },
+    {
+      "frame": 5,
+      "t_sec": 150,
+      "detections": [
+        {"uid": "friendly-01", "callsign": "BLUE-1", "classification": "friendly", "confidence": 0.98, "lat": 36.208, "lon": -115.082, "note": "JTAC staging"},
+        {"uid": "friendly-02", "callsign": "BLUE-2", "classification": "friendly", "confidence": 0.96, "lat": 36.214, "lon": -115.098, "note": "Screen"},
+        {"uid": "cluster-b-1", "callsign": "CONVOY-1", "classification": "hostile", "confidence": 0.94, "lat": 36.185, "lon": -115.045, "note": "CLUSTER B · lead after second strike pass"},
+        {"uid": "cluster-b-3", "callsign": "CP-PICKUP", "classification": "hostile", "confidence": 0.9, "lat": 36.173, "lon": -115.0495, "note": "CLUSTER B · CP fleeing northeast"}
+      ]
+    },
+    {
+      "frame": 6,
+      "t_sec": 180,
+      "detections": [
+        {"uid": "friendly-01", "callsign": "BLUE-1", "classification": "friendly", "confidence": 0.98, "lat": 36.208, "lon": -115.082, "note": "JTAC staging"},
+        {"uid": "friendly-02", "callsign": "BLUE-2", "classification": "friendly", "confidence": 0.96, "lat": 36.214, "lon": -115.098, "note": "Screen"},
+        {"uid": "cluster-b-3", "callsign": "CP-PICKUP", "classification": "hostile", "confidence": 0.88, "lat": 36.176, "lon": -115.047, "note": "CLUSTER B · last tracked HVI · BDA"}
+      ]
+    },
+    {
+      "frame": 7,
+      "t_sec": 210,
+      "detections": [
+        {"uid": "friendly-01", "callsign": "BLUE-1", "classification": "friendly", "confidence": 0.98, "lat": 36.208, "lon": -115.082, "note": "JTAC staging · battle damage check"},
+        {"uid": "friendly-02", "callsign": "BLUE-2", "classification": "friendly", "confidence": 0.96, "lat": 36.214, "lon": -115.098, "note": "Screen · negative further contacts"},
+        {"uid": "cluster-a-1", "callsign": "TRUCK-N", "classification": "hostile", "confidence": 0.72, "lat": 36.2175, "lon": -115.0915, "note": "BDA · last known CLUSTER A plot (held for map)"},
+        {"uid": "cluster-a-2", "callsign": "TRUCK-S", "classification": "hostile", "confidence": 0.7, "lat": 36.2192, "lon": -115.0888, "note": "BDA · last known CLUSTER A plot (held for map)"},
+        {"uid": "cluster-a-3", "callsign": "BUGGY-1", "classification": "hostile", "confidence": 0.68, "lat": 36.2168, "lon": -115.0865, "note": "BDA · last known CLUSTER A plot (held for map)"},
+        {"uid": "cluster-b-1", "callsign": "CONVOY-1", "classification": "hostile", "confidence": 0.71, "lat": 36.185, "lon": -115.045, "note": "BDA · last known CLUSTER B plot (held for map)"},
+        {"uid": "cluster-b-2", "callsign": "CONVOY-2", "classification": "hostile", "confidence": 0.69, "lat": 36.1805, "lon": -115.044, "note": "BDA · last known CLUSTER B plot (held for map)"},
+        {"uid": "cluster-b-3", "callsign": "CP-PICKUP", "classification": "hostile", "confidence": 0.73, "lat": 36.176, "lon": -115.047, "note": "BDA · last tracked HVI (held for map)"},
+        {"uid": "unk-cee", "callsign": "UNK-CEE", "classification": "unknown", "confidence": 0.45, "lat": 36.195, "lon": -115.07, "note": "BDA · ambiguous track held for PID review"}
+      ]
+    }
+  ]
+}

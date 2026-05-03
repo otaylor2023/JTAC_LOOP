@@ -1,0 +1,515 @@
+#!/usr/bin/env python3
+"""
+toy_jetson.py — simulated Jetson detection loop for autoJTAC demo.
+
+Reads bay_scenario.json and replays frames in order, sending CoT
+to WinTAK/ATAK via UDP (multicast by default). Handles adds, updates, and removes
+automatically via TAKBridge.sync_detections().
+
+Multicast only reaches another PC if the LAN routes it and WinTAK listens on
+that group/port. For a viewer on a server, push unicast to its IP and inbound
+UDP CoT port (WinTAK: Preferences → Network — often 4242).
+
+Usage:
+    python toy_jetson.py                          # default: reads bay_scenario.json
+    python toy_jetson.py --scenario my_data.json  # custom scenario file
+    python toy_jetson.py --speed 2.0              # 2x playback speed
+    python toy_jetson.py --loop                   # loop forever (unless scenario sets single_run)
+    python toy_jetson.py --host 239.2.3.1         # custom multicast group
+    python toy_jetson.py --unicast 10.0.0.5:4242  # also UDP unicast to WinTAK host
+    python toy_jetson.py --no-multicast --unicast 192.168.1.50:4242
+    python toy_jetson.py --mcast-iface 192.168.1.2  # multicast egress NIC (multi-homed)
+
+Scenario JSON (optional keys):
+    frame_interval_sec — minimum seconds between frames (also caps vs t_sec deltas).
+    single_run — if true, ignore --loop and exit after one play-through (linger still runs after).
+    post_clear_sleep_sec — seconds to wait before CoT deletes (default 3).
+    sync_stale_seconds — CoT stale time on every sync during playback (default 30; use ≥120 for slow frames).
+    linger_forever — after last frame, keep refreshing friendlies with wiggle until Ctrl+C (no auto clear).
+    linger_interval_sec — seconds between linger refreshes (default 2).
+    linger_stale_seconds — CoT stale horizon on each linger ping (default 6 hours).
+    wiggle_all_tracks — if true, jiggle every detection each frame (not only friendlies); linger uses last frame plus any hostile/unknown dropped only in that frame (carry-forward) so OPFOR stays on the map.
+    reset_before_play — if true, clear_all + pause at start of each scenario run (clean TAK before first frame).
+    reset_ui_before_linger — if true, clear_all + pause before live linger loop (default: same as reset_before_play).
+    reset_ui_pause_sec — seconds to pause after clear so the UI can settle (default 0.45).
+    wiggle_circle_radius_m_play — optional override for per-frame circular patrol radius (meters).
+    wiggle_circle_radius_m_linger — optional override for linger circular radius (meters).
+    wiggle_omega_scale — multiply angular speed on circles (default 1; use 0.2–0.5 for slower arcs).
+"""
+
+import argparse
+import json
+import math
+import socket
+import time
+import pathlib
+from datetime import datetime, timezone, timedelta
+from typing import Optional
+
+# ─── TAKBridge (inline so this file is self-contained) ───────────────────────
+
+
+def parse_unicast_targets(specs: list[str], default_port: int) -> list[tuple[str, int]]:
+    """Parse --unicast values like '10.0.0.5' or '10.0.0.5:4242' into (host, port)."""
+    out: list[tuple[str, int]] = []
+    for raw in specs:
+        s = raw.strip()
+        if not s:
+            continue
+        if ":" in s:
+            host, _, port_s = s.rpartition(":")
+            out.append((host.strip(), int(port_s)))
+        else:
+            out.append((s, int(default_port)))
+    return out
+
+
+class TAKBridge:
+    MULTICAST_GROUP = "239.2.3.1"
+    MULTICAST_PORT  = 6969
+
+    COT_TYPES = {
+        "friendly": "a-f-G-U-C",
+        "hostile":  "a-h-G-U-C",
+        "neutral":  "a-n-G-U-C",
+        "unknown":  "a-u-G-U-C",
+    }
+
+    def __init__(
+        self,
+        host: str = MULTICAST_GROUP,
+        port: int = MULTICAST_PORT,
+        ttl: int = 64,
+        *,
+        unicast_targets: Optional[list[tuple[str, int]]] = None,
+        multicast: bool = True,
+        mcast_out_ip: Optional[str] = None,
+    ):
+        # `host` / `port` remain the multicast group + port (backward compatible).
+        self._mcast_group = host
+        self._mcast_port = port
+        self._multicast = bool(multicast)
+        self._unicast_targets = list(unicast_targets or [])
+        self.active: dict[str, dict] = {}
+
+        self._sock = socket.socket(
+            socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP
+        )
+        if self._multicast:
+            self._sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, ttl)
+        if mcast_out_ip:
+            try:
+                self._sock.setsockopt(
+                    socket.IPPROTO_IP,
+                    socket.IP_MULTICAST_IF,
+                    socket.inet_aton(mcast_out_ip),
+                )
+            except OSError as exc:
+                print(f"WARNING: IP_MULTICAST_IF {mcast_out_ip!r} failed: {exc}")
+
+    # ── public API ────────────────────────────────────────────────────────────
+
+    def send_target(self, uid: str, lat: float, lon: float,
+                    callsign: str, classification: str = "unknown",
+                    confidence: float = 0.0, stale_seconds: int = 30,
+                    nine_line: Optional[dict] = None):
+        now   = datetime.now(timezone.utc)
+        stale = now + timedelta(seconds=stale_seconds)
+        fmt   = "%Y-%m-%dT%H:%M:%SZ"
+        cot_type = self.COT_TYPES.get(classification, self.COT_TYPES["unknown"])
+
+        import json as _json
+        payload = {"confidence": round(confidence, 2),
+                   "classification": classification}
+        if nine_line:
+            payload["nine_line"] = nine_line
+        remarks = f"AUTOJTAC::{_json.dumps(payload)}"
+
+        cot = (
+            f'<?xml version="1.0"?>'
+            f'<event version="2.0" uid="{uid}" type="{cot_type}"'
+            f' time="{now.strftime(fmt)}"'
+            f' start="{now.strftime(fmt)}"'
+            f' stale="{stale.strftime(fmt)}"'
+            f' how="m-g">'
+            f'<point lat="{lat}" lon="{lon}"'
+            f' hae="0" ce="9999999" le="9999999"/>'
+            f'<detail>'
+            f'<contact callsign="{callsign}"/>'
+            f'<remarks>{remarks}</remarks>'
+            f'</detail>'
+            f'</event>'
+        )
+        self._send(cot)
+        self.active[uid] = dict(lat=lat, lon=lon, callsign=callsign,
+                                classification=classification,
+                                confidence=confidence)
+
+    def delete_target(self, uid: str):
+        now = datetime.now(timezone.utc)
+        fmt = "%Y-%m-%dT%H:%M:%SZ"
+        ts  = now.strftime(fmt)
+        cot = (
+            f'<?xml version="1.0"?>'
+            f'<event version="2.0" uid="{uid}" type="t-x-d-d"'
+            f' time="{ts}" start="{ts}" stale="{ts}" how="m-g">'
+            f'<point lat="0" lon="0" hae="0" ce="9999999" le="9999999"/>'
+            f'<detail/></event>'
+        )
+        self._send(cot)
+        self.active.pop(uid, None)
+
+    def sync_detections(self, detections: list[dict], stale_seconds: int = 30):
+        """Diff current detections against active markers — add, update, remove."""
+        incoming_uids = {d["uid"] for d in detections}
+
+        # remove anything no longer detected
+        for uid in list(self.active.keys()):
+            if uid not in incoming_uids:
+                self.delete_target(uid)
+                print(f"  [-] REMOVED  {uid}")
+
+        # add or update
+        for det in detections:
+            uid    = det["uid"]
+            action = "UPDATE" if uid in self.active else "ADD   "
+            self.send_target(
+                uid            = uid,
+                lat            = det["lat"],
+                lon            = det["lon"],
+                callsign       = det.get("callsign", uid),
+                classification = det.get("classification", "unknown"),
+                confidence     = det.get("confidence", 0.0),
+                stale_seconds  = det.get("stale_seconds", stale_seconds),
+            )
+            icon = {"friendly": "🟦", "hostile": "🔴",
+                    "unknown":  "🟡", "neutral": "⬜"}.get(
+                        det.get("classification", "unknown"), "⬜")
+            print(f"  [{action}] {icon} {det['callsign']:12s} "
+                  f"({det['classification']:8s} {det['confidence']:.0%})  "
+                  f"{det['lat']:.4f}, {det['lon']:.4f}"
+                  + (f"  — {det['note']}" if det.get("note") else ""))
+            time.sleep(0.05)
+
+    def clear_all(self):
+        for uid in list(self.active.keys()):
+            self.delete_target(uid)
+
+    def _send(self, cot: str):
+        data = cot.encode()
+        if self._multicast:
+            self._sock.sendto(data, (self._mcast_group, self._mcast_port))
+        for uh, up in self._unicast_targets:
+            self._sock.sendto(data, (uh, up))
+
+    def __del__(self):
+        try:
+            self._sock.close()
+        except Exception:
+            pass
+
+
+# ─── Scenario loader ──────────────────────────────────────────────────────────
+
+def load_scenario(path: pathlib.Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+_EARTH_M_PER_DEG_LAT = 111_320.0
+
+
+def _circle_offset_deg(lat0_deg: float, radius_m: float, theta_rad: float) -> tuple[float, float]:
+    """Local tangent plane: each θ step is a point on a circle; lon scale uses cos(lat)."""
+    cos_lat = max(math.cos(math.radians(lat0_deg)), 0.2)
+    dlat = (radius_m / _EARTH_M_PER_DEG_LAT) * math.cos(theta_rad)
+    dlon = (radius_m / (_EARTH_M_PER_DEG_LAT * cos_lat)) * math.sin(theta_rad)
+    return dlat, dlon
+
+
+def _circle_kinematics(
+    uid: str, r_play: float, r_linger: float, omega_scale: float = 1.0
+):
+    """Per-uid phase, angular rate, and radius so every track traces its own circle."""
+    h = hash(str(uid)) % (2**31)
+    phi0 = (h % 1000) / 1000.0 * 2.0 * math.pi
+    omega_play = (0.16 + (h % 500) / 500.0 * 0.42) * omega_scale
+    omega_linger = (0.12 + (h % 400) / 400.0 * 0.35) * omega_scale
+    r_p = r_play * (0.82 + (h % 13) / 40.0)
+    r_l = r_linger * (0.82 + ((h >> 3) % 13) / 40.0)
+    return phi0, omega_play, omega_linger, r_p, r_l
+
+
+def _wiggle_track_positions(
+    detections: list[dict],
+    phase: float,
+    jiggle_all: bool,
+    radius_m_play: float,
+    omega_scale: float,
+) -> list[dict]:
+    """Each track patrols a small ground circle; friendlies only unless jiggle_all."""
+    out = []
+    for d in detections:
+        if not jiggle_all and d.get("classification") != "friendly":
+            out.append(d)
+            continue
+        uid = str(d.get("uid", ""))
+        blat = float(d["lat"])
+        blo = float(d["lon"])
+        phi0, om_p, _, r_m, _ = _circle_kinematics(
+            uid, radius_m_play, radius_m_play, omega_scale
+        )
+        theta = phi0 + float(phase) * om_p
+        dlat, dlon = _circle_offset_deg(blat, r_m, theta)
+        out.append({**d, "lat": blat + dlat, "lon": blo + dlon})
+    return out
+
+
+def _linger_track_templates(frames: list[dict], wiggle_all: bool) -> list[dict]:
+    """
+    Detections to refresh during linger_forever.
+
+    With wiggle_all, if the final frame omits hostile/unknown UIDs that still
+    existed earlier, merge their last-known copies so WinTAK/ATAK keeps red/gray
+    tracks (BDA / training plot) instead of only friendlies after a narrative
+    'all cleared' frame.
+    """
+    if not frames:
+        return []
+    final = list(frames[-1].get("detections", []))
+    if not wiggle_all:
+        friend = [d for d in final if d.get("classification") == "friendly"]
+        return friend if friend else final
+
+    final_uids = {d["uid"] for d in final}
+    carried: dict[str, dict] = {}
+    for fr in reversed(frames[:-1]):
+        for d in fr.get("detections", []):
+            uid = d.get("uid")
+            if not uid or uid in final_uids or uid in carried:
+                continue
+            cls = d.get("classification", "")
+            if cls in ("hostile", "unknown"):
+                carried[uid] = dict(d)
+    return final + list(carried.values())
+
+
+def _linger_forever(
+    bridge: TAKBridge,
+    templates: list[dict],
+    bases: dict,
+    interval: float,
+    stale_sec: int,
+    radius_m_linger: float,
+    omega_scale: float,
+    quiet_every: int = 15,
+):
+    """Refresh CoT on an interval; each uid traces its own circle until Ctrl+C."""
+    n = 0
+    while True:
+        for d in templates:
+            uid = d["uid"]
+            bla, blo = bases[uid]
+            phi0, _, om_l, _, r_l = _circle_kinematics(
+                uid, radius_m_linger, radius_m_linger, omega_scale
+            )
+            theta = phi0 + n * om_l
+            dlat, dlon = _circle_offset_deg(bla, r_l, theta)
+            lat = bla + dlat
+            lon = blo + dlon
+            bridge.send_target(
+                uid=uid,
+                lat=lat,
+                lon=lon,
+                callsign=d.get("callsign", uid),
+                classification=d.get("classification", "friendly"),
+                confidence=float(d.get("confidence", 0.0)),
+                stale_seconds=stale_sec,
+            )
+        n += 1
+        if n % quiet_every == 0:
+            print(f"  … linger tick {n}  ({len(templates)} tracks, stale={stale_sec}s)")
+        time.sleep(interval)
+
+
+# ─── Main playback loop ───────────────────────────────────────────────────────
+
+def play(scenario: dict, bridge: TAKBridge,
+         speed: float = 1.0, loop: bool = False, linger: bool = False):
+
+    frames = scenario["frames"]
+    name   = scenario.get("scenario", "Unknown Scenario")
+    # Scenario can force one shot (ignores CLI --loop) for canned training files.
+    if scenario.get("single_run"):
+        loop = False
+
+    linger = bool(linger or scenario.get("linger_forever"))
+    min_gap = scenario.get("frame_interval_sec")
+    post_clear_sleep = float(scenario.get("post_clear_sleep_sec", 3))
+    sync_stale = int(scenario.get("sync_stale_seconds", 30))
+    linger_iv = float(scenario.get("linger_interval_sec", 2.0))
+    linger_stale = int(scenario.get("linger_stale_seconds", 6 * 3600))
+    wiggle_all = bool(scenario.get("wiggle_all_tracks"))
+    reset_play = bool(scenario.get("reset_before_play"))
+    reset_b4_linger = bool(
+        scenario.get("reset_ui_before_linger", reset_play)
+    )
+    reset_pause = float(scenario.get("reset_ui_pause_sec", 0.45))
+    r_play = float(scenario.get("wiggle_circle_radius_m_play", 235.0))
+    r_linger = float(scenario.get("wiggle_circle_radius_m_linger", 310.0))
+    omega_scale = float(scenario.get("wiggle_omega_scale", 1.0))
+
+    run = 0
+    while True:
+        run += 1
+        print(f"\n{'='*60}")
+        print(f"  {name}  (run #{run})")
+        print(f"{'='*60}")
+
+        if reset_play:
+            bridge.clear_all()
+            print(f"  [reset] cleared prior markers · pause {reset_pause:.2f}s …")
+            time.sleep(reset_pause)
+
+        for i, frame in enumerate(frames):
+            t_sec    = frame["t_sec"]
+            frame_no = frame["frame"]
+            dets = _wiggle_track_positions(
+                frame["detections"],
+                phase=float(frame_no),
+                jiggle_all=wiggle_all,
+                radius_m_play=r_play,
+                omega_scale=omega_scale,
+            )
+
+            print(f"\n── Frame {frame_no:02d}  t={t_sec:>4}s  "
+                  f"({len(dets)} detections) ──")
+
+            bridge.sync_detections(dets, stale_seconds=sync_stale)
+
+            # sleep until next frame (or end)
+            if i < len(frames) - 1:
+                next_t = frames[i + 1]["t_sec"]
+                dt = (next_t - t_sec) / max(speed, 1e-6)
+                if min_gap is not None:
+                    dt = max(dt, float(min_gap) / max(speed, 1e-6))
+                print(f"  ⏱  next frame in {dt:.1f}s ...")
+                time.sleep(dt)
+
+        if linger:
+            linger_dets = _linger_track_templates(frames, wiggle_all)
+            if reset_b4_linger:
+                bridge.clear_all()
+                print(
+                    f"  [reset] cleared before live jiggle · pause {reset_pause:.2f}s …"
+                )
+                time.sleep(reset_pause)
+            bases = {d["uid"]: (float(d["lat"]), float(d["lon"])) for d in linger_dets}
+            print(
+                f"\n🔆 Linger: refreshing {len(linger_dets)} track(s) every {linger_iv}s "
+                f"(stale={linger_stale}s). Ctrl+C to stop and clear."
+            )
+            _linger_forever(
+                bridge,
+                linger_dets,
+                bases,
+                linger_iv,
+                linger_stale,
+                r_linger,
+                omega_scale,
+            )
+            return
+
+        print(f"\n✅ Scenario complete. Clearing all markers in {post_clear_sleep:.0f}s...")
+        time.sleep(post_clear_sleep)
+        bridge.clear_all()
+        print("  All markers removed.")
+        print("  End of scenario (exiting).")
+
+        if not loop:
+            return
+
+        print(f"\n🔁 Looping... (Ctrl+C to stop)")
+        time.sleep(2)
+
+
+# ─── CLI ──────────────────────────────────────────────────────────────────────
+
+def parse_args():
+    p = argparse.ArgumentParser(description="Toy Jetson detection loop — autoJTAC demo")
+    p.add_argument("--scenario", type=pathlib.Path,
+                   default=pathlib.Path(__file__).parent / "bay_scenario.json",
+                   help="Path to scenario JSON (default: bay_scenario.json)")
+    p.add_argument("--host", default="239.2.3.1",
+                   help="Multicast group (default: 239.2.3.1)")
+    p.add_argument("--port", type=int, default=6969,
+                   help="Multicast port; also default UDP port for --unicast if omitted (default: 6969)")
+    p.add_argument(
+        "--unicast",
+        action="append",
+        default=None,
+        metavar="HOST[:PORT]",
+        help="Also send each CoT as UDP unicast (repeatable). Use WinTAK machine IP "
+        "and its inbound CoT UDP port (check Preferences → Network; often 4242).",
+    )
+    p.add_argument(
+        "--no-multicast",
+        action="store_true",
+        help="Disable multicast; send only to --unicast destinations (needs ≥1 --unicast).",
+    )
+    p.add_argument(
+        "--mcast-iface",
+        default=None,
+        metavar="LOCAL_IP",
+        help="IPv4 of local interface for multicast egress (use on multi-NIC devices).",
+    )
+    p.add_argument("--speed", type=float, default=1.0,
+                   help="Playback speed multiplier (default: 1.0, try 3.0 for fast demo)")
+    p.add_argument("--loop", action="store_true",
+                   help="Loop scenario forever")
+    p.add_argument("--linger", action="store_true",
+                   help="After last frame, wiggle / refresh tracks forever until Ctrl+C (see scenario linger_* keys)")
+    return p.parse_args()
+
+
+def main():
+    args = parse_args()
+
+    ucast = parse_unicast_targets(args.unicast or [], args.port)
+    if args.no_multicast and not ucast:
+        print("ERROR: --no-multicast requires at least one --unicast HOST[:PORT]")
+        return
+
+    print(f"autoJTAC toy Jetson  |  {args.speed}x speed")
+    if not args.no_multicast:
+        print(f"  Multicast CoT: {args.host}:{args.port}")
+    else:
+        print("  Multicast: disabled")
+    for h, prt in ucast:
+        print(f"  Unicast CoT:   {h}:{prt}")
+    if args.mcast_iface:
+        print(f"  Multicast egress interface: {args.mcast_iface}")
+    print(f"Scenario: {args.scenario}")
+
+    if not args.scenario.exists():
+        print(f"ERROR: scenario file not found: {args.scenario}")
+        return
+
+    scenario = load_scenario(args.scenario)
+    bridge = TAKBridge(
+        host=args.host,
+        port=args.port,
+        unicast_targets=ucast,
+        multicast=not args.no_multicast,
+        mcast_out_ip=args.mcast_iface,
+    )
+
+    try:
+        play(scenario, bridge, speed=args.speed, loop=args.loop, linger=args.linger)
+    except KeyboardInterrupt:
+        print("\n\nInterrupted — clearing all markers...")
+        bridge.clear_all()
+        print("Done.")
+
+
+if __name__ == "__main__":
+    main()
