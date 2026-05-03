@@ -17,8 +17,7 @@ WinTAK (typical):
 CivTAK (typical):
   - Add streaming connection: TCP / port 8087 / no SSL
 
-Python feed (same Mac as Docker — no env vars):
-  python scripts/cot_feed.py
-  python scripts/cot_feed.py --host 127.0.0.1 --port 8087
+PyTAK TCP lab feed (archived / not maintained here): see ``archive/cot_feed.py``.
+For scenario-driven CoT + optional plugin UDP, use ``jtac_edge/jtac_scenario_runner.py`` instead.
 
 Restart nothing required—8087 is already published by docker-compose.yml.

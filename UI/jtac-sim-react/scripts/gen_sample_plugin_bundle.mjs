@@ -1,5 +1,5 @@
 /**
- * Writes JTAC_LOOP/data/sample_plugin_targets_bundle.json — one envelope with
+ * Writes JTAC_LOOP/jtac_edge/data/sample_plugin_targets_bundle.json — one envelope with
  * per-hostile attack options for the ATAK plugin (Jetson wire example).
  *
  * For each hostile: recommend() primary + recommend() with weapon_override
@@ -76,7 +76,7 @@ const bundle = {
   targets,
 };
 
-const outPath = path.resolve(__dirname, '../../../data/sample_plugin_targets_bundle.json');
+const outPath = path.resolve(__dirname, '../../../jtac_edge/data/sample_plugin_targets_bundle.json');
 fs.mkdirSync(path.dirname(outPath), { recursive: true });
 fs.writeFileSync(outPath, JSON.stringify(bundle, null, 2) + '\n', 'utf8');
 console.log('Wrote', outPath);

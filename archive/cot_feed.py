@@ -15,11 +15,11 @@ discard inbound bytes on a background drain. Newline after each event is optiona
 By default we append a unique suffix to each event's uid so FTS does not hit duplicate DB identity
 errors on repeat publishes; use --stable-uid to keep JSON uids as-is.
 
-Examples:
-  python scripts/cot_feed.py
-  python scripts/cot_feed.py --host 127.0.0.1 --port 8087
-  python scripts/cot_feed.py --host 192.168.1.50 --port 8087   # script on another PC
-  python scripts/cot_feed.py --tls --tls-ca deploy/fts-certs/ca.pem \\
+Examples (from repo root):
+  python archive/cot_feed.py
+  python archive/cot_feed.py --host 127.0.0.1 --port 8087
+  python archive/cot_feed.py --host 192.168.1.50 --port 8087
+  python archive/cot_feed.py --tls --tls-ca deploy/fts-certs/ca.pem \\
       --tls-client-cert deploy/fts-certs/Client.p12 --tls-password supersecret
 """
 
@@ -70,7 +70,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         "--data",
         type=pathlib.Path,
         default=None,
-        help=f"JSON feed file (default: {_repo_root() / 'data' / 'sample_feed.json'}).",
+        help=f"JSON feed file (default: {_repo_root() / 'jtac_edge' / 'data' / 'sample_feed.json'}).",
     )
     p.add_argument(
         "--interval",
@@ -140,7 +140,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     if ns.port is None:
         ns.port = 8089 if ns.tls else 8087
     if ns.data is None:
-        ns.data = _repo_root() / "data" / "sample_feed.json"
+        ns.data = _repo_root() / "jtac_edge" / "data" / "sample_feed.json"
     ns.data = ns.data.expanduser().resolve()
 
     return ns

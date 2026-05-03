@@ -1,6 +1,6 @@
 {
   "scenario": "SE Florida JTAC lab (CoT + plugin wire)",
-  "description": "Same shape as bay_scenario.json for toy_jetson.py, plus jtac_plugin_targets so send_plugin_json_udp.py can emit wire_kind single_target messages. Hostile uids match target_id so map pick resolves without extra meta.",
+  "description": "Same narrative shape as jtac_edge/data/old_scenarios/bay_scenario.json for jtac_scenario_runner.py, plus jtac_plugin_targets so send_plugin_json_udp.py can emit wire_kind single_target messages. Hostile uids match target_id so map pick resolves without extra meta.",
   "frame_interval_sec": 3.0,
   "schema_version": 1,
   "jtac_self_id": "JTAC_LOOP bay_scenario_jtac",

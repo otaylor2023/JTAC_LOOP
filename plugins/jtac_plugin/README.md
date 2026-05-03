@@ -11,7 +11,7 @@ This project is a copy of the **Hello World** ATAK plugin sample, renamed for **
 
 ## Open in Android Studio
 
-Open the **`jtac_plugin`** folder (this directory), not the whole SDK root.
+Open the **`plugins/jtac_plugin`** folder in this repo (this directory when opened in Android Studio), not the whole SDK root.
 
 ## Build
 

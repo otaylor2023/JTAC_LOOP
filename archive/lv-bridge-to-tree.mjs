@@ -3,8 +3,8 @@
  * Las Vegas toy scenario → deterministic decision tree (recommend / recommendSequence).
  * Maps CoT-style detections to engine hostiles/friendlies (target_class, movement_state, etc.).
  *
- * Run:  node scripts/lv-bridge-to-tree.mjs
- *        node scripts/lv-bridge-to-tree.mjs --frame 3
+ * Run:  node archive/lv-bridge-to-tree.mjs
+ *        node archive/lv-bridge-to-tree.mjs --frame 3
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -17,7 +17,7 @@ const root = path.resolve(__dirname, '..');
 import { recommend, recommendSequence } from '../UI/jtac-sim-react/src/engine/decisionTree.js';
 import { AIRCRAFT_ON_STATION, WEATHER, ROE } from '../UI/jtac-sim-react/src/data/units.js';
 
-const LV_PATH = path.join(root, 'las_vegas_scenario.json');
+const LV_PATH = path.join(root, 'jtac_edge/data/old_scenarios/las_vegas_scenario.json');
 
 /** ROE-approved classes used by 02_munition_selection / demo ROE */
 const ROE_VEHICLE_SOFT = 'vehicle_wheeled_soft';
@@ -28,7 +28,7 @@ function loadLasVegas() {
 }
 
 /**
- * Map toy_jetson "classification" + callsign/note to decision-tree target_class.
+ * Map scenario JSON "classification" + callsign/note to decision-tree target_class (same shape as jtac_scenario_runner).
  */
 function targetClassFor(det) {
   const note = (det.note || '').toLowerCase();
