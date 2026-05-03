@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="SectionLabel">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">#FBBF24</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:letterSpacing">0.08</item>
+        <item name="android:padding">8dp</item>
+        <item name="android:fontFamily">monospace</item>
+    </style>
+
+    <style name="FieldLabel">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">#94A3B8</item>
+        <item name="android:textSize">10sp</item>
+        <item name="android:letterSpacing">0.05</item>
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:layout_marginEnd">6dp</item>
+    </style>
+
+    <style name="FieldValue">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">#E2E8F0</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:fontFamily">monospace</item>
+    </style>
+
+    <style name="FieldValueBig">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">#E2E8F0</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:padding">8dp</item>
+        <item name="android:background">#0A1929</item>
+        <item name="android:layout_marginBottom">6dp</item>
+    </style>
+
+    <style name="FieldSub">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">#64748B</item>
+        <item name="android:textSize">10sp</item>
+        <item name="android:padding">4dp</item>
+    </style>
+
+    <style name="RemarksBlock">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">#CBD5E1</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:padding">8dp</item>
+        <item name="android:background">#0A1929</item>
+        <item name="android:fontFamily">monospace</item>
+    </style>
+
+    <style name="RestrictionsBlock">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">#FCA5A5</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:padding">8dp</item>
+        <item name="android:background">#1F0808</item>
+        <item name="android:fontFamily">monospace</item>
+    </style>
+
+    <style name="TraceBlock">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">#94A3B8</item>
+        <item name="android:textSize">10sp</item>
+        <item name="android:padding">6dp</item>
+        <item name="android:background">#0F172A</item>
+        <item name="android:fontFamily">monospace</item>
+    </style>
+</resources>

@@ -1,0 +1,48 @@
+// JTAC 9-Line plugin module.
+// Builds against the ATAK-CIV SDK once the AAR is dropped into app/libs/.
+
+apply plugin: 'com.android.application'
+apply plugin: 'org.jetbrains.kotlin.android'
+// TODO(SDK): once SDK is local, uncomment and the build will produce signed
+// civ flavor APKs ATAK can side-load.
+// apply plugin: 'atak-takdev-plugin'
+
+android {
+    namespace 'com.jtacsim.plugin'
+    compileSdk 33
+
+    defaultConfig {
+        applicationId 'com.jtacsim.plugin'
+        minSdk 26
+        targetSdk 33
+        versionCode 1
+        versionName '1.0.0'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    // TODO(SDK): uncomment once the SDK's main.aar is in app/libs/.
+    // The atak-takdev-plugin adds civ + mil flavor dimensions automatically.
+    // sourceSets {
+    //     main.java.srcDirs += 'src/main/java'
+    // }
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+    implementation 'androidx.core:core-ktx:1.10.1'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+
+    // TODO(SDK): drop the SDK's main.aar into app/libs/ then this line
+    // resolves and gives access to ATAK's plugin API + MapView.
+    // compileOnly fileTree(dir: 'libs', include: ['*.aar'])
+
+    testImplementation 'junit:junit:4.13.2'
+}

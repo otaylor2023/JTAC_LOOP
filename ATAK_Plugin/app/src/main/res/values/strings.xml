@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">JTAC 9-Line Engine</string>
+    <string name="plugin_name">9-Line</string>
+    <string name="plugin_description">Generates draft 9-line CAS briefs from drone CV detections</string>
+</resources>

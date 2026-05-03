@@ -1,0 +1,2 @@
+rootProject.name = 'jtac-9line-plugin'
+include ':app'

@@ -1,0 +1,30 @@
+// Root project Gradle config. The actual plugin module (`app/`) imports
+// `atak-gradle-takdev` from the SDK to wire ATAK signing + flavors.
+
+buildscript {
+    ext.kotlin_version = '1.9.0'
+
+    repositories {
+        google()
+        mavenCentral()
+        // TODO(SDK): once your teammate has the SDK locally, point this at
+        // the SDK's local maven repo (typically inside the SDK zip).
+        // mavenLocal()
+        // maven { url "$projectDir/atak-sdk-maven-repo" }
+    }
+
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.0.2'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+        // TODO(SDK): TAK provides this plugin in the SDK. Match the version
+        // to the SDK you've downloaded.
+        // classpath 'com.atakmap.gradle:atak-gradle-takdev:2.+'
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}

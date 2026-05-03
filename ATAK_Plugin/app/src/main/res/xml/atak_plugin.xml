@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    ATAK plugin manifest. This XML is what ATAK reads to discover the plugin
+    when it loads the APK at startup. The path to this file is referenced
+    from AndroidManifest.xml's <meta-data android:name="atak.plugin"/>.
+
+    The element names below match the ATAK-CIV plugin schema as of v4.10.
+    Newer SDK versions may rename — check the bundled helloworld plugin.
+-->
+<plugin xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <name>JTAC 9-Line Engine</name>
+    <description>@string/plugin_description</description>
+    <version>1.0.0</version>
+    <author>JTAC Sim Team</author>
+
+    <!-- Lifecycle entry point — class must implement IPlugin (post-SDK wiring) -->
+    <lifecycle>com.jtacsim.plugin.JtacPluginLifecycle</lifecycle>
+
+    <!-- Toolbar tool -->
+    <tool>
+        <id>jtac.nineline</id>
+        <name>9-Line</name>
+        <class>com.jtacsim.plugin.JtacTool</class>
+    </tool>
+
+</plugin>
