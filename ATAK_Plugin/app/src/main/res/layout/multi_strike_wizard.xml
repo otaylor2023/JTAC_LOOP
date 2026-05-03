@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Multi-strike wizard. 1:1 functional layout for StrikeSequence.jsx.
+
+    Sections (top → bottom):
+      • Header: title + close + progress dots row
+      • Strike-count stepper
+      • Engagement summary card (aircraft, coordination, spread, munitions, hint)
+      • Per-strike strike-detail block (text dump of the active step's 9-line)
+      • Footer: prev / next / deny  →  becomes "SEND N 9-LINES" once all acted
+
+    All ID names match what MultiStrikeView.kt looks up by getIdentifier.
+-->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0A1929">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <!-- ═════ HEADER ═════ -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:padding="8dp"
+            android:background="#1E293B">
+
+            <Button android:id="@+id/ms_back"
+                android:layout_width="40dp" android:layout_height="40dp"
+                android:text="✕"
+                android:background="#0F172A" android:textColor="#CBD5E1"/>
+
+            <TextView android:id="@+id/ms_title"
+                android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:text="MULTI-STRIKE"
+                android:textColor="#FBBF24" android:textStyle="bold" android:textSize="14sp"/>
+
+            <LinearLayout android:id="@+id/ms_progress_dots"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center"/>
+
+            <TextView android:id="@+id/ms_progress_text"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:textColor="#94A3B8" android:textSize="11sp"/>
+        </LinearLayout>
+
+        <!-- ═════ STRIKE COUNT ═════ -->
+        <TextView style="@style/SectionLabel" android:text="ENGAGEMENT"/>
+        <com.jtacsim.plugin.ui.StepperView
+            android:id="@+id/ms_strike_count_stepper"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"/>
+
+        <!-- ═════ ENGAGEMENT SUMMARY CARD ═════ -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="10dp"
+            android:layout_marginTop="6dp"
+            android:background="#1E293B">
+
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:padding="3dp">
+                <TextView style="@style/FieldLabel" android:text="Aircraft"
+                    android:layout_width="0dp" android:layout_weight="1"/>
+                <TextView android:id="@+id/eng_aircraft" style="@style/FieldValue" android:fontFamily="monospace"/>
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:padding="3dp">
+                <TextView style="@style/FieldLabel" android:text="Coordination"
+                    android:layout_width="0dp" android:layout_weight="1"/>
+                <TextView android:id="@+id/eng_coordination" style="@style/FieldValue"/>
+            </LinearLayout>
+            <LinearLayout android:id="@+id/eng_spread_row"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:padding="3dp">
+                <TextView style="@style/FieldLabel" android:text="Target spread"
+                    android:layout_width="0dp" android:layout_weight="1"/>
+                <TextView android:id="@+id/eng_spread" style="@style/FieldValue" android:fontFamily="monospace"/>
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:padding="3dp">
+                <TextView style="@style/FieldLabel" android:text="Munitions"
+                    android:layout_width="0dp" android:layout_weight="1"/>
+                <TextView android:id="@+id/eng_munitions" style="@style/FieldValue" android:fontFamily="monospace"/>
+            </LinearLayout>
+            <TextView android:id="@+id/eng_coord_hint"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:padding="8dp" android:layout_marginTop="6dp"
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:visibility="gone"/>
+        </LinearLayout>
+
+        <!-- ═════ PER-STRIKE DETAIL ═════ -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical"
+            android:layout_marginTop="14dp">
+            <TextView android:id="@+id/strike_step_label" style="@style/SectionLabel"
+                android:layout_width="0dp" android:layout_weight="1"/>
+            <TextView android:id="@+id/strike_status_pill"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:padding="6dp"
+                android:textSize="11sp" android:textStyle="bold"
+                android:visibility="gone"/>
+        </LinearLayout>
+
+        <TextView android:id="@+id/strike_detail_block"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="10dp"
+            android:textColor="#E2E8F0"
+            android:fontFamily="monospace"
+            android:textSize="11sp"
+            android:background="#0F172A"/>
+
+        <!-- ═════ FOOTER ═════ -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:layout_marginTop="14dp">
+            <Button android:id="@+id/wf_prev"
+                android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="←"
+                android:background="#1E293B" android:textColor="#CBD5E1"/>
+            <Button android:id="@+id/wf_next"
+                android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="2"
+                android:layout_marginStart="6dp"
+                android:text="NEXT →"
+                android:background="#1E3A5F" android:textColor="#FEF3C7"
+                android:textStyle="bold"/>
+            <Button android:id="@+id/wf_deny"
+                android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="6dp"
+                android:text="✗ deny"
+                android:background="#3F1212" android:textColor="#FCA5A5"/>
+            <Button android:id="@+id/wf_send"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="📡 SEND"
+                android:background="#92400E" android:textColor="#FEF3C7"
+                android:textStyle="bold"
+                android:visibility="gone"/>
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

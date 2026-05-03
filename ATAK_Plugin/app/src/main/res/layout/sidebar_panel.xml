@@ -1,7 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 9-Line sidebar panel. Layout is intentionally simple — every editable
-     control should be tap-driven (no soft keyboard) per JTAC operational use.
-     Matches the React app's typing-free UI. -->
+<!--
+    9-Line CAS sidebar panel. 1:1 functional layout for NineLineForm.jsx.
+
+    Sections (top → bottom):
+      • Header bar:        title + status badge + close (X)
+      • Block banner:      shown only when engageability == NOT_ENGAGEABLE
+      • Flag bar:          chip-row of any flags
+      • OPT A / OPT B cards (radio pattern)
+      • Game plan:         target chip-picker, control/MOA, weapon detail
+      • CAS 9-Line:        9 numbered fields, every one editable
+      • Remarks + Restrictions blocks (engine-generated, read-only)
+      • Additional remarks (free-form textarea)
+      • Reasoning trace expandable
+      • Footer: Send 9-Line + GFC Summary
+
+    All ID names match what NineLineView.kt looks up via getIdentifier so the
+    binding works even if R.java isn't yet generated (SDK not on classpath).
+-->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -13,19 +28,29 @@
         android:orientation="vertical"
         android:padding="12dp">
 
-        <!-- Header -->
+        <!-- ═════ HEADER ═════ -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:padding="8dp"
+            android:gravity="center_vertical"
             android:background="#1E293B">
+
+            <Button android:id="@+id/nl_back"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:text="✕"
+                android:background="#0F172A"
+                android:textColor="#CBD5E1"
+                android:textSize="14sp" />
 
             <TextView
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="9-LINE CAS REQUEST"
+                android:layout_marginStart="8dp"
+                android:text="9-LINE CAS BRIEF"
                 android:textColor="#FBBF24"
                 android:textStyle="bold"
                 android:textSize="14sp" />
@@ -37,20 +62,44 @@
                 android:text="LIVE"
                 android:textColor="#FEF3C7"
                 android:background="#92400E"
-                android:padding="4dp"
-                android:textSize="11sp" />
+                android:padding="6dp"
+                android:textSize="11sp"
+                android:textStyle="bold" />
         </LinearLayout>
 
-        <!-- Block reasons (only visible when NOT_ENGAGEABLE) -->
-        <TextView
-            android:id="@+id/block_reasons"
+        <!-- ═════ BLOCK BANNER (visible only when blocked) ═════ -->
+        <LinearLayout
+            android:id="@+id/block_banner"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="#FCA5A5"
-            android:padding="8dp"
-            android:visibility="gone" />
+            android:orientation="vertical"
+            android:padding="10dp"
+            android:background="#3F1212"
+            android:visibility="gone"
+            android:layout_marginTop="6dp">
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="⚠ NOT ENGAGEABLE"
+                android:textColor="#FCA5A5"
+                android:textStyle="bold"
+                android:textSize="13sp" />
+            <TextView android:id="@+id/block_reasons"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#FCA5A5"
+                android:textSize="12sp"
+                android:layout_marginTop="4dp" />
+            <TextView android:id="@+id/block_flags"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#FBBF24"
+                android:fontFamily="monospace"
+                android:textSize="11sp"
+                android:layout_marginTop="4dp" />
+        </LinearLayout>
 
-        <!-- Flags row -->
+        <!-- ═════ FLAG BAR ═════ -->
         <TextView
             android:id="@+id/flags"
             android:layout_width="match_parent"
@@ -58,81 +107,280 @@
             android:textColor="#FBBF24"
             android:padding="6dp"
             android:textSize="11sp"
-            android:fontFamily="monospace" />
+            android:fontFamily="monospace"
+            android:visibility="gone" />
 
-        <!-- Game plan -->
-        <TextView style="@style/SectionLabel" android:text="GAME PLAN" />
+        <!-- ═════ OPT A / OPT B ═════ -->
+        <TextView style="@style/SectionLabel" android:text="PICK A RECOMMENDATION" android:layout_marginTop="8dp"/>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="2dp">
+
+            <LinearLayout android:id="@+id/opt_a_card"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:padding="10dp"
+                android:layout_marginEnd="4dp">
+                <TextView android:id="@+id/opt_a_label"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="A · Primary"
+                    android:textColor="#94A3B8" android:textSize="11sp"/>
+                <TextView android:id="@+id/opt_a_weapon"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textColor="#FEF3C7" android:textSize="16sp"
+                    android:textStyle="bold" android:fontFamily="monospace"
+                    android:layout_marginTop="4dp"/>
+                <TextView android:id="@+id/opt_a_meta"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textColor="#94A3B8" android:textSize="10sp"
+                    android:layout_marginTop="2dp"/>
+            </LinearLayout>
+
+            <LinearLayout android:id="@+id/opt_b_card"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:padding="10dp"
+                android:layout_marginStart="4dp">
+                <TextView android:id="@+id/opt_b_label"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="B · Alternate"
+                    android:textColor="#94A3B8" android:textSize="11sp"/>
+                <TextView android:id="@+id/opt_b_weapon"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textColor="#FEF3C7" android:textSize="16sp"
+                    android:textStyle="bold" android:fontFamily="monospace"
+                    android:layout_marginTop="4dp"/>
+                <TextView android:id="@+id/opt_b_meta"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textColor="#94A3B8" android:textSize="10sp"
+                    android:layout_marginTop="2dp"/>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- ═════ GAME PLAN ═════ -->
+        <TextView style="@style/SectionLabel" android:text="GAME PLAN" android:layout_marginTop="12dp"/>
 
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:orientation="horizontal" android:padding="6dp">
+            android:orientation="horizontal" android:gravity="center_vertical" android:padding="6dp">
             <TextView style="@style/FieldLabel" android:text="Target:" />
-            <TextView android:id="@+id/target_id" style="@style/FieldValue" />
+            <TextView android:id="@+id/target_id" style="@style/FieldValue" android:layout_marginEnd="8dp"/>
+            <Button android:id="@+id/target_why"
+                android:layout_width="32dp" android:layout_height="32dp"
+                android:text="i" android:textSize="11sp"
+                android:background="#1E3A5F" android:textColor="#A7F3D0"/>
         </LinearLayout>
+        <com.jtacsim.plugin.ui.ChipPickerView
+            android:id="@+id/target_chip_picker"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"/>
+        <TextView android:id="@+id/target_sub" style="@style/FieldSub"/>
+
+        <TextView style="@style/FieldLabel" android:text="Control · MOA" android:layout_marginTop="6dp"/>
+        <EditText android:id="@+id/control_moa"
+            style="@style/FieldEdit"
+            android:fontFamily="monospace"
+            android:textSize="14sp"/>
+        <TextView android:id="@+id/clearance_call" style="@style/FieldSub"/>
 
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:orientation="horizontal" android:padding="6dp">
-            <TextView style="@style/FieldLabel" android:text="Munition:" />
-            <TextView android:id="@+id/munition_id" style="@style/FieldValue" />
+            android:orientation="horizontal" android:gravity="center_vertical" android:padding="6dp">
+            <TextView android:id="@+id/weapon_detail" style="@style/FieldSub"
+                android:layout_width="0dp" android:layout_weight="1"/>
+            <Button android:id="@+id/weapon_why"
+                android:layout_width="32dp" android:layout_height="32dp"
+                android:text="i" android:textSize="11sp"
+                android:background="#1E3A5F" android:textColor="#A7F3D0"/>
         </LinearLayout>
-        <TextView android:id="@+id/munition_detail" style="@style/FieldSub" />
 
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:orientation="horizontal" android:padding="6dp">
-            <TextView style="@style/FieldLabel" android:text="Type:" />
-            <TextView android:id="@+id/control_type" style="@style/FieldValue" />
-            <TextView style="@style/FieldLabel" android:text="MOA:" android:layout_marginStart="12dp" />
-            <TextView android:id="@+id/method_of_attack" style="@style/FieldValue" />
+        <!-- ═════ 9-LINE ═════ -->
+        <LinearLayout
+            android:id="@+id/nine_line_section"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="12dp">
+
+            <TextView style="@style/SectionLabel" android:text="CAS 9-LINE"/>
+
+            <!-- Line 1 — IP/BP -->
+            <TextView style="@style/FieldLabel" android:text="① IP / BP"/>
+            <com.jtacsim.plugin.ui.ChipPickerView
+                android:id="@+id/ip_chip_picker"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"/>
+            <EditText android:id="@+id/line_1_input" style="@style/FieldEdit"/>
+            <TextView style="@style/FieldSub" android:text="Tap an IP to update Line 2 heading + map attack vector"/>
+
+            <!-- Line 2 — Heading -->
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical">
+                <TextView style="@style/FieldLabel" android:text="② Heading"
+                    android:layout_width="0dp" android:layout_weight="1"/>
+                <Button android:id="@+id/line_2_why"
+                    android:layout_width="32dp" android:layout_height="32dp"
+                    android:text="i" android:background="#1E3A5F" android:textColor="#A7F3D0"/>
+            </LinearLayout>
+            <EditText android:id="@+id/line_2_input" style="@style/FieldEditBig"/>
+            <TextView style="@style/FieldSub" android:text="Drag the orange handle on the map to adjust live"/>
+
+            <!-- Line 3 — Distance -->
+            <TextView style="@style/FieldLabel" android:text="③ Distance"/>
+            <EditText android:id="@+id/line_3_input" style="@style/FieldEditBig"/>
+
+            <!-- Line 4 — Target Elevation (READBACK) -->
+            <TextView style="@style/FieldLabel" android:text="④ Target Elevation (READBACK)"/>
+            <EditText android:id="@+id/line_4_input" style="@style/FieldEditBig"/>
+
+            <!-- Line 5 — Target Description -->
+            <TextView style="@style/FieldLabel" android:text="⑤ Target Description"/>
+            <EditText android:id="@+id/line_5_input" style="@style/FieldEdit"/>
+
+            <!-- Line 6 — Target Location (READBACK) -->
+            <TextView style="@style/FieldLabel" android:text="⑥ Target Location (READBACK)"/>
+            <EditText android:id="@+id/line_6_input" style="@style/FieldEditBig" android:fontFamily="monospace"/>
+            <TextView android:id="@+id/line_6_sub" style="@style/FieldSub"/>
+
+            <!-- Line 7 — Mark + PRF -->
+            <TextView style="@style/FieldLabel" android:text="⑦ Mark / Terminal Guidance"/>
+            <EditText android:id="@+id/line_7_input" style="@style/FieldEdit"/>
+
+            <LinearLayout
+                android:id="@+id/prf_block"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:padding="4dp"
+                android:layout_marginTop="4dp"
+                android:visibility="gone">
+                <TextView style="@style/FieldLabel" android:text="PRF Code"/>
+                <Button android:id="@+id/prf_minus"
+                    android:layout_width="48dp" android:layout_height="48dp"
+                    android:text="−" android:textSize="20sp"
+                    android:background="#1E293B" android:textColor="#FBBF24"/>
+                <EditText android:id="@+id/prf_input"
+                    android:layout_width="80dp" android:layout_height="48dp"
+                    android:inputType="number"
+                    android:gravity="center"
+                    android:textColor="#FEF3C7"
+                    android:fontFamily="monospace"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:background="#0A1929"
+                    android:layout_marginStart="6dp"
+                    android:layout_marginEnd="6dp"/>
+                <Button android:id="@+id/prf_plus"
+                    android:layout_width="48dp" android:layout_height="48dp"
+                    android:text="+" android:textSize="20sp"
+                    android:background="#1E293B" android:textColor="#FBBF24"/>
+                <TextView style="@style/FieldSub" android:text="  Each digit 1–8"/>
+            </LinearLayout>
+
+            <!-- Line 8 — Friendlies -->
+            <TextView style="@style/FieldLabel" android:text="⑧ Friendlies"/>
+            <EditText android:id="@+id/line_8_input" style="@style/FieldEditBig"/>
+            <TextView style="@style/FieldSub" android:text="From drone — JTAC-PLI uplink"/>
+
+            <!-- Line 9 — Egress: cardinal rose + altitude stepper + free text -->
+            <TextView style="@style/FieldLabel" android:text="⑨ Egress"/>
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:padding="6dp">
+                <com.jtacsim.plugin.ui.CardinalRoseView
+                    android:id="@+id/egress_rose"
+                    android:layout_width="160dp"
+                    android:layout_height="160dp"/>
+                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical"
+                    android:gravity="center" android:layout_marginStart="12dp">
+                    <com.jtacsim.plugin.ui.StepperView
+                        android:id="@+id/egress_alt_stepper"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"/>
+                </LinearLayout>
+            </LinearLayout>
+            <EditText android:id="@+id/line_9_input" style="@style/FieldEdit"/>
+
         </LinearLayout>
-        <TextView android:id="@+id/clearance_call" style="@style/FieldSub" />
 
-        <!-- 9-line -->
-        <TextView style="@style/SectionLabel" android:text="9-LINE" android:layout_marginTop="12dp" />
+        <!-- ═════ REMARKS + RESTRICTIONS ═════ -->
+        <LinearLayout
+            android:id="@+id/remarks_wrap"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="12dp">
+            <TextView style="@style/SectionLabel" android:text="REMARKS · ENGINE-GENERATED"/>
+            <TextView android:id="@+id/remarks_block" style="@style/RemarksBlock"/>
+        </LinearLayout>
+        <LinearLayout
+            android:id="@+id/restrictions_wrap"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="6dp">
+            <TextView style="@style/SectionLabel" android:text="RESTRICTIONS · MANDATORY READBACK"/>
+            <TextView android:id="@+id/restrictions_block" style="@style/RestrictionsBlock"/>
+        </LinearLayout>
 
-        <TextView style="@style/FieldLabel" android:text="L4 · Target Elevation (READBACK)" />
-        <TextView android:id="@+id/line_4" style="@style/FieldValueBig" />
+        <!-- ═════ ADDITIONAL REMARKS (free-form) ═════ -->
+        <TextView style="@style/SectionLabel" android:text="ADDITIONAL REMARKS" android:layout_marginTop="8dp"/>
+        <EditText
+            android:id="@+id/additional_remarks"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minLines="3"
+            android:gravity="top|start"
+            android:padding="8dp"
+            android:textSize="12sp"
+            android:textColor="#E2E8F0"
+            android:background="#0A1929"
+            android:hint="Type any extra remarks for transmission…"
+            android:textColorHint="#475569"/>
 
-        <TextView style="@style/FieldLabel" android:text="L5 · Target Description" />
-        <TextView android:id="@+id/line_5" style="@style/FieldValueBig" />
+        <!-- ═════ REASONING TRACE (expandable) ═════ -->
+        <TextView
+            android:id="@+id/trace_summary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="10dp"
+            android:layout_marginTop="10dp"
+            android:textColor="#A7F3D0"
+            android:fontFamily="monospace"
+            android:textSize="11sp"
+            android:background="#1E293B"
+            android:text="How the model decided ▾"/>
+        <TextView
+            android:id="@+id/trace_body"
+            style="@style/TraceBlock"
+            android:visibility="gone"/>
 
-        <TextView style="@style/FieldLabel" android:text="L6 · Target Location (READBACK)" />
-        <TextView android:id="@+id/line_6" style="@style/FieldValueBig" android:fontFamily="monospace" />
-
-        <TextView style="@style/FieldLabel" android:text="L7 · Mark / Terminal Guidance" />
-        <TextView android:id="@+id/line_7" style="@style/FieldValueBig" />
-
-        <TextView style="@style/FieldLabel" android:text="L8 · Friendlies" />
-        <TextView android:id="@+id/line_8" style="@style/FieldValueBig" />
-
-        <TextView style="@style/FieldLabel" android:text="L9 · Egress" />
-        <TextView android:id="@+id/line_9" style="@style/FieldValueBig" />
-
-        <!-- Remarks + Restrictions -->
-        <TextView style="@style/SectionLabel" android:text="REMARKS" android:layout_marginTop="12dp" />
-        <TextView android:id="@+id/remarks_block" style="@style/RemarksBlock" />
-
-        <TextView style="@style/SectionLabel" android:text="RESTRICTIONS · MANDATORY READBACK" />
-        <TextView android:id="@+id/restrictions_block" style="@style/RestrictionsBlock" />
-
-        <!-- Reasoning trace -->
-        <TextView style="@style/SectionLabel" android:text="HOW THE MODEL DECIDED" android:layout_marginTop="12dp" />
-        <TextView android:id="@+id/trace_block" style="@style/TraceBlock" />
-
-        <!-- Footer buttons -->
+        <!-- ═════ FOOTER ═════ -->
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:orientation="horizontal" android:layout_marginTop="16dp">
+            android:orientation="horizontal" android:layout_marginTop="14dp">
             <Button android:id="@+id/btn_send_9line"
                 android:layout_width="0dp" android:layout_height="wrap_content"
                 android:layout_weight="2"
                 android:text="📡 SEND 9-LINE"
                 android:background="#92400E"
-                android:textColor="#FEF3C7" />
+                android:textColor="#FEF3C7"
+                android:textStyle="bold"/>
             <Button android:id="@+id/btn_gfc_summary"
                 android:layout_width="0dp" android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_marginStart="6dp"
                 android:text="GFC SUMMARY"
                 android:background="#1E3A5F"
-                android:textColor="#CBD5E1" />
+                android:textColor="#CBD5E1"/>
         </LinearLayout>
 
     </LinearLayout>

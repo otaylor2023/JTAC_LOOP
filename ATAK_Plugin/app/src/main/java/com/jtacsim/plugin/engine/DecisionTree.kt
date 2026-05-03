@@ -60,8 +60,9 @@ data class TacticalState(
     val aircraft: Aircraft,
     val weather: Weather,
     val roe: ROE,
-    val timeOfDay: String = "day",          // "day" | "night"
-    val userHeading: Int? = null,           // JTAC override
+    val timeOfDay: String = "day",
+    val userHeading: Int? = null,
+    val weaponOverride: String? = null,            // JTAC weapon override → forces a specific munition
     val jtacVisualOnTarget: Boolean = false,
     val jtacVisualOnAircraft: Boolean = false,
     val friendliesTakingEffectiveFire: Boolean = false,
@@ -125,11 +126,14 @@ data class Recommendation(
 
 object DecisionTree {
 
+    // PID confidence thresholds by target class. Lowered after live testing:
+    // 0.92 was eliminating viable targets a human JTAC would have engaged.
+    // Mirrors React engine's PID_THRESHOLDS_BY_CLASS. Pending Collen review.
     private val PID_THRESHOLDS = mapOf(
-        "vehicle"   to 0.85,
-        "personnel" to 0.92,
-        "structure" to 0.85,
-        "default"   to 0.85,
+        "vehicle"   to 0.80,
+        "personnel" to 0.85,
+        "structure" to 0.80,
+        "default"   to 0.80,
     )
 
     private val TLE_M = mapOf("CAT_I" to 10, "CAT_II" to 20, "CAT_III" to 30)
@@ -189,6 +193,26 @@ object DecisionTree {
         val closest = Geo.closestFriendly(target, state.friendlies)
         val friendlyDistanceM = closest?.distanceM ?: Double.POSITIVE_INFINITY
 
+        // ── JTAC weapon override path — mirror React engine. We skip the
+        //    survivor/ranker and synthesize a Quad as if the override munition
+        //    won. Flag MARGINAL if the rating is poor so the JTAC sees they're
+        //    outside the engine's recommendation.
+        var overrideQuad: Quad? = null
+        if (state.weaponOverride != null) {
+            val mOverride = Munitions.byId(state.weaponOverride)
+            if (mOverride != null) {
+                val stocked = state.aircraft.loadout[mOverride.id] ?: 0
+                val rating = TargetEffectiveness.rating(target.targetClass, mOverride.effectivenessClass)
+                val fl = mutableListOf<String>()
+                if (friendlyDistanceM <= mOverride.redStandingM) fl += "DANGER_CLOSE"
+                if (mOverride.type1Prohibited) fl += "TYPE_1_PROHIBITED"
+                if (rating == Rating.NOT_REC || rating == Rating.MARGINAL) fl += "MARGINAL_EFFECTIVENESS_OVERRIDE"
+                trace += TraceStep("Tree 2 — Munition", "flagged",
+                    "JTAC override → ${mOverride.id}. Rating: $rating.${if (fl.isNotEmpty()) " Flags: ${fl.joinToString(", ")}" else ""}")
+                overrideQuad = Quad(mOverride, rating, stocked, 1.0, fl)
+            }
+        }
+
         // Stage 0 — movement gate (Collen CF-1.3)
         val isMover = target.movementState in listOf("slow", "fast") || target.isMovable
         val primaryFamilies: Set<String> = if (isMover) setOf("laser", "gps_laser", "iir") else setOf("gps", "gps_laser")
@@ -213,7 +237,7 @@ object DecisionTree {
             survivors += Triple(m, rating, stocked)
         }
 
-        if (survivors.isEmpty()) {
+        if (overrideQuad == null && survivors.isEmpty()) {
             trace += TraceStep("Tree 2 — Munition", "blocked",
                 "No viable munition (${eliminations.size} eliminated). Top reasons: ${eliminations.take(3).joinToString("; ") { "${it.first} (${it.second})" }}")
             return blocked(listOf("No viable munition"), trace, listOf("NO_VIABLE_MUNITION"), target.id)
@@ -234,7 +258,8 @@ object DecisionTree {
             Quad(m, rating, stocked, score, flags)
         }.sortedByDescending { it.score }
 
-        val top = ranked.first()
+        // If JTAC overrode the weapon, use the override; otherwise the engine's pick.
+        val top = overrideQuad ?: ranked.first()
         val alternatives = ranked.drop(1).take(2).map { q ->
             val why = when {
                 q.m.guidance == "iir" && isMover -> "IIR seeker — autonomous lock on movers"

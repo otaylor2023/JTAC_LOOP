@@ -78,4 +78,31 @@
         <item name="android:background">#0F172A</item>
         <item name="android:fontFamily">monospace</item>
     </style>
+
+    <!-- Editable text input styled to look like a tactical readout. Mirrors
+         the React app's <TacInput>. EditText so the touch keyboard works,
+         dark background, monospace bold so values match printed 9-line forms. -->
+    <style name="FieldEdit">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">#E2E8F0</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:padding">10dp</item>
+        <item name="android:background">#0A1929</item>
+        <item name="android:layout_marginBottom">6dp</item>
+        <item name="android:singleLine">true</item>
+    </style>
+
+    <style name="FieldEditBig">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">#FEF3C7</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:padding">10dp</item>
+        <item name="android:background">#0A1929</item>
+        <item name="android:layout_marginBottom">6dp</item>
+        <item name="android:singleLine">true</item>
+    </style>
 </resources>
