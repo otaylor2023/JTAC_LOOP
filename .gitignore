@@ -38,3 +38,7 @@ deploy/.env
 # FTS cert export (private); README is safe to commit
 deploy/fts-certs/*
 !deploy/fts-certs/README.txt
+
+# Large SDK archives — never commit
+*.zip
+ATAK-CIV-*-SDK*
