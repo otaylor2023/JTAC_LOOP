@@ -16,6 +16,7 @@ export function useAIRecommendation({
   self,
   primaryTargetId,
   user_heading,
+  weapon_override,                                    // JTAC weapon override
   // Tactical knobs the operator can flip (from the form / map):
   jtac_visual_on_target = false,
   jtac_visual_on_aircraft = false,
@@ -45,6 +46,7 @@ export function useAIRecommendation({
       roe: ROE,
       time_of_day: 'day',
       user_heading,
+      weapon_override,
       jtac_visual_on_target,
       jtac_visual_on_aircraft,
       friendlies_taking_effective_fire,
@@ -55,7 +57,7 @@ export function useAIRecommendation({
       drone_has_ir_pointer,
     });
   }, [
-    hostiles, friendlies, self, primaryTargetId, user_heading,
+    hostiles, friendlies, self, primaryTargetId, user_heading, weapon_override,
     jtac_visual_on_target, jtac_visual_on_aircraft,
     friendlies_taking_effective_fire, multi_target_window,
     supported_commander_authorized_type_3, target_is_time_sensitive,

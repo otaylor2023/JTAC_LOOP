@@ -1,0 +1,24 @@
+LAB CONNECTION — NO CA / NO CLIENT CERT / NO P12 PASSWORD
+===========================================================
+
+FreeTAKServer SSL port 8089 REQUIRES mutual TLS (CA + client cert).
+There is no supported server setting to "turn that off."
+
+Use PLAIN TCP CoT on port 8087 instead (trusted LAN only; not encrypted).
+
+WinTAK (typical):
+  - Manage Server Connections
+  - Protocol: TCP (NOT SSL)
+  - Host: your Mac Wi-Fi IP (same as FTS_IP in .env)
+  - Port: 8087
+  - Do NOT install Certificate Authority or Client Certificate for this profile
+  - Use Authentication: OFF
+
+CivTAK (typical):
+  - Add streaming connection: TCP / port 8087 / no SSL
+
+Python feed (same Mac as Docker — no env vars):
+  python scripts/cot_feed.py
+  python scripts/cot_feed.py --host 127.0.0.1 --port 8087
+
+Restart nothing required—8087 is already published by docker-compose.yml.

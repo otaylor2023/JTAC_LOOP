@@ -4,20 +4,24 @@
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
-  --hostile:   #ef4444;
-  --friendly:  #3b82f6;
-  --amber:     #f59e0b;
-  --green:     #10b981;
-  --purple:    #818cf8;
-  --bg:        #0a0d12;
-  --card:      #0d1117;
-  --border:    #1a2332;
-  --sheet-bg:  #0a0d12;
-  --text:      #e8f0f7;
-  --muted:     #a8bccf;
-  --label:     #6b7e91;
-  --font-ui:   'IBM Plex Sans', system-ui, sans-serif;
-  --font-mono: 'IBM Plex Mono', 'Menlo', monospace;
+  /* WinTAK-aligned tactical palette — minimal functional colors only.
+     Reference: ATAK-CIV / WinTAK side-panels and overlays. Dark gray
+     panels with ~1-2px hairline borders, mono-faced data, ALL CAPS
+     labels, sharp corners. */
+  --hostile:   #d13434;
+  --friendly:  #2c6fcf;
+  --amber:     #d8941e;       /* slightly desaturated vs decorative amber */
+  --green:     #2da765;
+  --bg:        #0c0c0c;
+  --card:      #141414;
+  --border:    #2a2a2a;
+  --sheet-bg:  #0e0e0e;
+  --panel-bar: #1a1a1a;       /* slightly raised: header / toolbar strip */
+  --text:      #d8dde0;
+  --muted:     #969ba0;
+  --label:     #6c7176;
+  --font-ui:   'Segoe UI', system-ui, 'Helvetica Neue', sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Consolas', 'Menlo', monospace;
 }
 
 html, body, #root { height: 100%; width: 100%; }

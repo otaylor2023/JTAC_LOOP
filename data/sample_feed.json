@@ -1,0 +1,22 @@
+{
+  "points": [
+    {
+      "lat": 36.1715,
+      "lon": -115.1391,
+      "uid": "hostile-vegas",
+      "callsign": "OPFOR-VEGAS",
+      "remark": "JTAC_LOOP hostile Las Vegas",
+      "cot_type": "a-h-G-U-C",
+      "stale": 600
+    },
+    {
+      "lat": 37.4419,
+      "lon": -122.143,
+      "uid": "jtac-local-test",
+      "callsign": "JTAC-LOCAL-TEST",
+      "remark": "JTAC_LOOP friendly near Stanford — pan here first",
+      "cot_type": "a-f-G-U-C",
+      "stale": 600
+    }
+  ]
+}

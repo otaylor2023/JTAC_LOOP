@@ -68,7 +68,9 @@ export default function MapView({
   showAttack = true,
   scenarioActive = false,
   weaponMinSafe = null,
+  egressDir = null,
   onChangeHeading,
+  onSelectHostile,
   resizeKey,
 }) {
   const containerRef = useRef(null);
@@ -81,12 +83,15 @@ export default function MapView({
   const fahConeRef = useRef(null);
   const blastRingRef = useRef(null);
   const handleMarkerRef = useRef(null);
+  const egressLineRef = useRef(null);
   const draggingRef = useRef(false);
   const onChangeHeadingRef = useRef(onChangeHeading);
+  const onSelectHostileRef = useRef(onSelectHostile);
 
   useEffect(() => {
     onChangeHeadingRef.current = onChangeHeading;
-  }, [onChangeHeading]);
+    onSelectHostileRef.current = onSelectHostile;
+  }, [onChangeHeading, onSelectHostile]);
 
   // init once
   useEffect(() => {
@@ -140,14 +145,28 @@ export default function MapView({
       let m = hostileMarkersRef.current.get(h.id);
       if (!m) {
         m = L.marker([h.lat, h.lng], { icon: mkHostileIcon(isPrimary) })
-          .addTo(map)
-          .bindPopup(
-            `<div class="popup-lbl">HOSTILE</div><div class="popup-id" style="color:#ef4444">${h.id}</div><div class="popup-type">${h.type}</div>`
-          );
+          .addTo(map);
+        // Tap a hostile marker to make it the primary target. We bind BOTH
+        // the Leaflet handler AND a raw DOM listener on the marker element
+        // so the click works whether or not Leaflet's popup intercepts it.
+        const fire = () => onSelectHostileRef.current?.(h.id);
+        m.on('click', fire);
+        const el = m.getElement?.();
+        if (el) {
+          el.style.cursor = 'pointer';
+          el.addEventListener('click', e => { e.stopPropagation(); fire(); });
+        }
         hostileMarkersRef.current.set(h.id, m);
       } else {
         m.setLatLng([h.lat, h.lng]);
         m.setIcon(mkHostileIcon(isPrimary));
+        // Re-attach DOM listener since setIcon replaces the element
+        const el = m.getElement?.();
+        if (el && !el.dataset.clickBound) {
+          el.dataset.clickBound = '1';
+          el.style.cursor = 'pointer';
+          el.addEventListener('click', e => { e.stopPropagation(); onSelectHostileRef.current?.(h.id); });
+        }
       }
     });
 
@@ -224,6 +243,10 @@ export default function MapView({
       if (handleMarkerRef.current) {
         handleMarkerRef.current.remove();
         handleMarkerRef.current = null;
+      }
+      if (egressLineRef.current) {
+        egressLineRef.current.remove();
+        egressLineRef.current = null;
       }
     }
 
@@ -324,10 +347,34 @@ export default function MapView({
       handleMarkerRef.current.setLatLng([hLat, hLng]);
     }
 
+    // Egress arrow — orange dashed line from target outward in the egress
+    // cardinal direction. Updates live as the JTAC selects a different
+    // direction in the form's cardinal rose.
+    if (egressDir) {
+      const cardinalToDeg = { N: 0, NE: 45, E: 90, SE: 135, S: 180, SW: 225, W: 270, NW: 315 };
+      const deg = cardinalToDeg[egressDir] ?? 0;
+      const egressEnd = project(primary.lat, primary.lng, deg, 0.018);
+      const pts = [[primary.lat, primary.lng], egressEnd];
+      if (!egressLineRef.current) {
+        egressLineRef.current = L.polyline(pts, {
+          color: '#d8941e',                  // amber, matches attack vector — same flight
+          weight: 2,
+          opacity: 0.75,
+          dashArray: '3,6',                  // dashed = egress (vs solid attack vector)
+          interactive: false,
+        }).addTo(map);
+      } else {
+        egressLineRef.current.setLatLngs(pts);
+      }
+    } else if (egressLineRef.current) {
+      egressLineRef.current.remove();
+      egressLineRef.current = null;
+    }
+
     return () => {
       // Only tear down on prop change that disables scenarioActive — handled above.
     };
-  }, [scenarioActive, hostiles, primaryTargetId, heading, weaponMinSafe]);
+  }, [scenarioActive, hostiles, primaryTargetId, heading, weaponMinSafe, egressDir]);
 
   // re-measure when parent layout/screen changes
   useEffect(() => {

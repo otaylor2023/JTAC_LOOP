@@ -34,3 +34,7 @@ venv/
 .env
 .env.local
 .env.*.local
+deploy/.env
+# FTS cert export (private); README is safe to commit
+deploy/fts-certs/*
+!deploy/fts-certs/README.txt

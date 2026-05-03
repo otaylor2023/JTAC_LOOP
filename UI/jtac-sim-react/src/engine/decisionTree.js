@@ -3,10 +3,14 @@
 // Inputs: { hostiles, friendlies, self, primaryTargetId, aircraft, weather, roe, time_of_day }
 // Output: structured recommendation matching DECISION_TREE/output_schema.json
 
-import { MUNITIONS, MUNITIONS_BY_ID, EFFECTIVENESS_RATINGS, effectivenessRating } from '../data/munitions.js';
-import { bearingDeg, distanceM, projectM, closestFriendly, friendlyDirectionFromTarget, approximateMGRS, bearingToCardinal } from './geo.js';
+import { MUNITIONS, MUNITIONS_BY_ID, EFFECTIVENESS_RATINGS, effectivenessRating } from '../data/munitions.js.js';
+import { bearingDeg, distanceM, projectM, closestFriendly, friendlyDirectionFromTarget, approximateMGRS, bearingToCardinal } from './geo.js.js';
 
-const PID_THRESHOLDS_BY_CLASS = { vehicle: 0.85, personnel: 0.92, structure: 0.85, default: 0.85 };
+// PID confidence thresholds by target class. Personnel is slightly higher
+// (civilian-vs-combatant ambiguity is harder), but lowered from 0.92 → 0.85
+// after live testing — 0.92 was eliminating viable targets that a human
+// JTAC would have engaged. Flagged for Collen confirmation.
+const PID_THRESHOLDS_BY_CLASS = { vehicle: 0.80, personnel: 0.85, structure: 0.80, default: 0.80 };
 
 // PID class lookup — maps target_class to coarse category for confidence threshold.
 function pidCategoryFor(targetClass) {
@@ -94,8 +98,34 @@ function engageabilityGate(state) {
 //   Stage 2C: rank
 // ─────────────────────────────────────────────────────────────────────────
 function munitionSelection(state, engOutput) {
-  const { target, closest_friendly_distance_m, aircraft, weather, time_of_day } = state;
+  const { target, closest_friendly_distance_m, aircraft, weather, time_of_day, weapon_override } = state;
   const trace = [];
+
+  // ── JTAC weapon override — skip the ranker, force a specific munition.
+  //    Still surfaces a MARGINAL flag if the rating is poor so the JTAC
+  //    sees they're outside the engine's recommendation.
+  if (weapon_override) {
+    const m = MUNITIONS_BY_ID[weapon_override];
+    if (m) {
+      const stocked = state.aircraft.loadout?.[m.id]?.count ?? 0;
+      const rating = effectivenessRating(target.target_class, m.effectiveness_class);
+      const flags = [];
+      if (closest_friendly_distance_m <= m.red_standing_m) flags.push('DANGER_CLOSE');
+      if (m.type_1_prohibited) flags.push('TYPE_1_PROHIBITED');
+      if (rating === 'NOT_REC' || rating === 'MARGINAL') flags.push('MARGINAL_EFFECTIVENESS_OVERRIDE');
+      trace.push({
+        tree: 'Tree 2 — Munition', status: 'flagged',
+        text: `JTAC override → ${m.id}. Rating: ${rating}. ${flags.length ? 'Flags: ' + flags.join(', ') : ''}`,
+      });
+      return {
+        munition: { ...m, _rating: rating, _stocked: stocked, _flags: flags, _score: 1.0 },
+        alternatives: [],
+        eliminated: [],
+        flags,
+        trace,
+      };
+    }
+  }
 
   // ── Stage 0: movement gate ──
   const isMover = ['slow', 'fast'].includes(target.movement_state) || target.is_movable;
@@ -684,10 +714,26 @@ export function recommendSequence(input, targetSequence) {
 }
 
 // Convenience: auto-prioritize a list of hostiles for sequence planning.
-// Default order: classification confidence DESC. Could swap for
-// proximity-to-friendlies, threat-level, etc.
+// PRE-FILTERS by per-class PID threshold so the planner doesn't waste
+// chain slots on targets that would block. Default order: confidence DESC.
 export function autoPrioritize(hostiles, mode = 'confidence_desc') {
-  const list = [...hostiles];
+  // Pre-filter: only include targets whose confidence meets the PID threshold
+  // for their class. Otherwise the chain breaks at the first low-conf target
+  // and "successful" strikes after it surface as skipped. Better to plan
+  // an engageable chain end-to-end.
+  const engageable = hostiles.filter(h => {
+    const cat = (() => {
+      const tc = h.target_class || '';
+      if (tc.startsWith('vehicle')) return 'vehicle';
+      if (tc.startsWith('personnel')) return 'personnel';
+      if (tc.startsWith('structure') || tc.startsWith('bunker')) return 'structure';
+      return 'default';
+    })();
+    const threshold = PID_THRESHOLDS_BY_CLASS[cat] ?? PID_THRESHOLDS_BY_CLASS.default;
+    return (h.cnn_confidence ?? 0) >= threshold;
+  });
+
+  const list = [...engageable];
   switch (mode) {
     case 'confidence_desc':
       return list.sort((a, b) => (b.cnn_confidence ?? 0) - (a.cnn_confidence ?? 0)).map(h => h.id);
@@ -700,4 +746,201 @@ export function autoPrioritize(hostiles, mode = 'confidence_desc') {
     default:
       return list.map(h => h.id);
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// CLUSTER BY PROXIMITY
+//
+// Type 3 control (JP 3-09.3 III-46) requires "multiple attacks within a
+// SINGLE engagement" — meaning one set of restrictions (FAH cone, geographic
+// boundary, target set, time window) must legitimately cover ALL strikes.
+//
+// In practice that means targets need to be close enough that one FAH and
+// one geographic boundary make sense. Doctrine doesn't pin a specific
+// distance (it's a JTAC judgment call), but ~500 m to a few km is typical
+// — about the size of one kill box keypad.
+//
+// Targets outside that cluster radius go in their own brief, transmitted
+// sequentially as separate Type 2 9-lines.
+// ─────────────────────────────────────────────────────────────────────────
+export function clusterByProximity(hostiles, targetIds, maxDistanceM = 500) {
+  const ids = [...targetIds];
+  const clusters = [];
+  const idToHostile = new Map(hostiles.map(h => [h.id, h]));
+
+  while (ids.length > 0) {
+    const cluster = [ids.shift()];
+    let added = true;
+    while (added) {
+      added = false;
+      for (let i = ids.length - 1; i >= 0; i--) {
+        const candId = ids[i];
+        const cand = idToHostile.get(candId);
+        if (!cand) { ids.splice(i, 1); continue; }
+        const closeToCluster = cluster.some(memberId => {
+          const m = idToHostile.get(memberId);
+          if (!m) return false;
+          return distanceM(cand.lat, cand.lng, m.lat, m.lng) <= maxDistanceM;
+        });
+        if (closeToCluster) {
+          cluster.push(candId);
+          ids.splice(i, 1);
+          added = true;
+        }
+      }
+    }
+    clusters.push(cluster);
+  }
+  return clusters;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// COMPLEX ENGAGEMENT PLANNER
+//
+// Takes a list of target IDs the JTAC wants to engage, clusters them by
+// proximity, and produces N briefs:
+//   - Each cluster of 2+ → one Type 3 multi-target brief
+//   - Each singleton → one Type 2 standalone 9-line
+//
+// Each brief plans against the PREDICTED state after the previous brief
+// (loadout decremented, prior targets removed). This means the engine
+// catches problems like "we run out of GBU-12 in cluster 2 because cluster
+// 1 used them all" — surfaced as chain_broken on the affected brief.
+// ─────────────────────────────────────────────────────────────────────────
+export function recommendComplexEngagement(input, targetIds, options = {}) {
+  const maxClusterDistanceM = options.maxClusterDistanceM ?? 500;
+  const clusters = clusterByProximity(input.hostiles, targetIds, maxClusterDistanceM);
+
+  const briefs = [];
+  let cumulativeState = {
+    ...input,
+    aircraft: { ...input.aircraft, loadout: { ...(input.aircraft.loadout || {}) } },
+  };
+
+  for (let cIdx = 0; cIdx < clusters.length; cIdx++) {
+    const clusterIds = clusters[cIdx];
+    const sequence = recommendSequence(cumulativeState, clusterIds);
+    const brief = consolidateAsType3(sequence);
+
+    briefs.push({
+      cluster_index: cIdx + 1,
+      cluster_target_ids: clusterIds,
+      cluster_size: clusterIds.length,
+      brief, // null if the cluster blocked entirely
+      sequence,
+      // Quick diameter readout — biggest target-to-target distance in cluster.
+      cluster_diameter_m: computeClusterDiameter(input.hostiles, clusterIds),
+    });
+
+    // Advance cumulative state — each successful strike removes a target
+    // and decrements the loadout. The next cluster plans against this state.
+    for (const step of sequence.steps) {
+      if (step.skipped || !step.recommendation || step.recommendation.engageability === 'NOT_ENGAGEABLE') continue;
+      cumulativeState = applyStrike(cumulativeState, step.recommendation);
+    }
+  }
+
+  const totalSuccessful = briefs.reduce((sum, b) => sum + (b.sequence?.successful_steps ?? 0), 0);
+
+  return {
+    briefs,
+    cluster_count: clusters.length,
+    total_strikes_planned: targetIds.length,
+    total_strikes_successful: totalSuccessful,
+    any_chain_broken: briefs.some(b => b.sequence?.chain_broken),
+    final_remaining_hostiles: cumulativeState.hostiles.map(h => ({ id: h.id, target_class: h.target_class })),
+  };
+}
+
+function computeClusterDiameter(hostiles, ids) {
+  let max = 0;
+  const idToHost = new Map(hostiles.map(h => [h.id, h]));
+  for (let i = 0; i < ids.length; i++) {
+    for (let j = i + 1; j < ids.length; j++) {
+      const a = idToHost.get(ids[i]);
+      const b = idToHost.get(ids[j]);
+      if (!a || !b) continue;
+      const d = distanceM(a.lat, a.lng, b.lat, b.lng);
+      if (d > max) max = d;
+    }
+  }
+  return Math.round(max);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// CONSOLIDATE INTO TYPE 3 MULTI-TARGET BRIEF
+//
+// Doctrinal pattern (JP 3-09.3 V-27): "Read one full 9-line, then provide
+// additional targets using Lines 4, 6, and 8 only, prior to remarks."
+//
+// Type 3 control (JP 3-09.3 III-46): one CLEARED TO ENGAGE covers all
+// strikes in the window, with specific attack restrictions: time window,
+// geographic boundary, target set, FAH.
+//
+// Takes a sequence result + transforms into the canonical Type 3 brief.
+// Falls back to single-target if there's only one viable strike.
+// ─────────────────────────────────────────────────────────────────────────
+export function consolidateAsType3(sequenceResult) {
+  const viableSteps = sequenceResult.steps.filter(
+    s => !s.skipped && s.recommendation?.engageability !== 'NOT_ENGAGEABLE'
+  );
+
+  if (viableSteps.length === 0) return null;
+
+  // First viable step provides the primary brief structure.
+  const primary = viableSteps[0].recommendation;
+  const additional = viableSteps.slice(1).map(s => ({
+    target_id: s.target_id,
+    line_4: s.recommendation.nine_line.line_4,
+    line_6: s.recommendation.nine_line.line_6,
+    line_8: s.recommendation.nine_line.line_8,
+    munition_id: s.recommendation.munition.primary.id,
+  }));
+
+  // For multi-target we ALWAYS use Type 3 even if the primary recommendation
+  // came back as Type 2. Doctrine: rapid succession + single engagement
+  // window = Type 3 control.
+  const isType3 = additional.length > 0;
+
+  // Unified remarks: take primary's remarks and add the multi-target ones.
+  const remarks = [...primary.remarks];
+  const restrictions = [...primary.restrictions.filter(r => !r.text.startsWith('TOT'))]; // TOT moves to end
+
+  if (isType3) {
+    const targetIds = viableSteps.map(s => s.target_id);
+    const munitionTally = Object.entries(sequenceResult.munitions_expended)
+      .map(([k, v]) => `${k}×${v}`).join(', ');
+    restrictions.push({
+      text: `Type 3 multi-target window — ${viableSteps.length} strikes, ${munitionTally}`,
+      type: 'restriction', mandatory_readback: true,
+    });
+    restrictions.push({
+      text: `Specific target set: ${targetIds.join(', ')} ONLY — do not engage other contacts in window`,
+      type: 'restriction', mandatory_readback: true,
+    });
+    restrictions.push({
+      text: 'Aircrew calls: COMMENCING ENGAGEMENT, ENGAGEMENT COMPLETE',
+      type: 'restriction', mandatory_readback: true,
+    });
+  }
+
+  // TOT always last
+  restrictions.push({ text: 'TOT push when ready', type: 'restriction', mandatory_readback: true });
+
+  return {
+    is_type_3: isType3,
+    strike_count: viableSteps.length,
+    game_plan: {
+      ...primary.game_plan,
+      control_type: isType3 ? 'Type_3' : primary.game_plan.control_type,
+      clearance_call_phrase: isType3 ? 'CLEARED TO ENGAGE' : primary.game_plan.clearance_call_phrase,
+    },
+    primary_brief: primary.nine_line,
+    primary_target_id: viableSteps[0].target_id,
+    primary_munition: primary.munition.primary,
+    additional_targets: additional,
+    remarks,
+    restrictions,
+    flags: [...new Set(viableSteps.flatMap(s => s.recommendation.flags ?? []))],
+  };
 }

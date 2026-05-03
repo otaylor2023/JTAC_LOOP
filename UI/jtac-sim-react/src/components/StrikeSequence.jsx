@@ -1,16 +1,23 @@
-import { useMemo, useState } from 'react';
-import { recommendSequence, autoPrioritize } from '../engine/decisionTree';
-import { AIRCRAFT_ON_STATION, WEATHER, ROE } from '../data/units';
+import { useMemo, useState, useEffect } from 'react';
+import { recommendSequence, autoPrioritize } from '../engine/decisionTree.js';
+import { distanceM } from '../engine/geo.js';
+import { AIRCRAFT_ON_STATION, WEATHER, ROE } from '../data/units.js';
+import { Stepper } from './Controls.jsx';
 
-// Multi-strike sequence planner.
+// Multi-strike planner — wizard flow.
 //
-// When a JTAC needs to engage multiple targets in rapid succession, the
-// drone feed can't update fast enough between strikes. This panel shows
-// the chained recommendations the engine produces by predicting the
-// post-strike state at each step and re-running on top of it.
+// 1. Pick total # of strikes via stepper.
+// 2. Step through them one at a time. Each step shows the full
+//    recommendation for that strike — review, confirm, or deny.
+// 3. After all are reviewed, single SEND button transmits the bundle.
 //
-// JTAC selects which targets to include + the order, sees the full chain,
-// and transmits the bundle as one queued sequence.
+// Engine still chains recursively under the hood — strike N+1 plans
+// against the predicted state after strike N. The transmission shape
+// is N independent Type 2 9-lines (per Collen's preference: keep simple
+// workflows simple). Type 3 consolidation lives in the engine for when
+// a multi-aircraft scenario calls for it.
+
+const STATUS = { PENDING: 'pending', REVIEWED: 'reviewed', DENIED: 'denied' };
 
 export default function StrikeSequence({
   active,
@@ -20,14 +27,19 @@ export default function StrikeSequence({
   onBack,
   onSendSequence,
 }) {
-  // Default order: confidence-descending (engine's autoPrioritize).
-  const initialOrder = useMemo(() => autoPrioritize(hostiles, 'confidence_desc'), [hostiles]);
-  const [order, setOrder] = useState(initialOrder);
-  const [enabled, setEnabled] = useState(() => new Set(initialOrder));
+  const [strikeCount, setStrikeCount] = useState(Math.min(hostiles.length, 2));
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [statuses, setStatuses] = useState([]);
 
-  // Re-run the chain whenever inputs change.
+  // Clamp count + reset wizard when hostile feed changes.
+  useEffect(() => {
+    setStrikeCount(c => Math.min(c, Math.max(1, hostiles.length)));
+  }, [hostiles.length]);
+
+  const order = useMemo(() => autoPrioritize(hostiles, 'confidence_desc'), [hostiles]);
+  const targetIds = order.slice(0, strikeCount);
+
   const sequence = useMemo(() => {
-    const targetIds = order.filter(id => enabled.has(id));
     if (targetIds.length === 0) return null;
     return recommendSequence(
       {
@@ -39,146 +51,250 @@ export default function StrikeSequence({
       },
       targetIds,
     );
-  }, [order, enabled, hostiles, friendlies, self]);
+  }, [targetIds.join('|'), hostiles, friendlies, self]);
 
-  function moveTarget(idx, dir) {
-    setOrder(prev => {
-      const next = [...prev];
-      const newIdx = idx + dir;
-      if (newIdx < 0 || newIdx >= next.length) return prev;
-      [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
-      return next;
-    });
-  }
+  // ── Coordination analysis: how spread are the targets? Used to suggest
+  //    whether this should be Type 3 consolidated brief or sequential Type 2.
+  //    Per JP 3-09.3 III-46, Type 3 only works when one set of restrictions
+  //    legitimately covers all strikes. Threshold ~500m (one kill-box keypad).
+  const coord = useMemo(() => {
+    if (targetIds.length < 2) return { type: 'single', spreadM: 0, recommended: 'type_2' };
+    const targetsInPlay = targetIds.map(id => hostiles.find(h => h.id === id)).filter(Boolean);
+    let maxSpread = 0;
+    for (let i = 0; i < targetsInPlay.length; i++) {
+      for (let j = i + 1; j < targetsInPlay.length; j++) {
+        const d = distanceM(targetsInPlay[i].lat, targetsInPlay[i].lng, targetsInPlay[j].lat, targetsInPlay[j].lng);
+        if (d > maxSpread) maxSpread = d;
+      }
+    }
+    const spreadM = Math.round(maxSpread);
+    let recommended = 'type_2';      // sequential default
+    let label = 'Sequential Type 2';
+    let detail = 'Targets dispersed — separate 9-lines per strike';
+    if (spreadM <= 500) {
+      recommended = 'type_3';
+      label = 'Type 3 viable';
+      detail = 'Tight cluster — one CLEARED TO ENGAGE could cover all strikes';
+    } else if (spreadM <= 1500) {
+      label = 'Sequential preferred';
+      detail = 'Borderline spread — separate 9-lines safer than Type 3';
+    }
+    return { type: 'multi', spreadM, recommended, label, detail };
+  }, [targetIds.join('|'), hostiles]);
 
-  function toggleEnabled(id) {
-    setEnabled(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }
+  // Reset statuses + clamp current index when count changes.
+  useEffect(() => {
+    setStatuses(Array.from({ length: strikeCount }, () => STATUS.PENDING));
+    setCurrentIdx(i => Math.min(i, Math.max(0, strikeCount - 1)));
+  }, [strikeCount]);
 
   if (!active) return null;
+
+  const maxStrikes = Math.max(1, hostiles.length);
+  const currentStep = sequence?.steps[currentIdx];
+  const isLast = currentIdx === strikeCount - 1;
+  const reviewedCount = statuses.filter(s => s === STATUS.REVIEWED).length;
+  const allActed = statuses.every(s => s !== STATUS.PENDING);
+
+  function setStatus(idx, value) {
+    setStatuses(prev => {
+      const next = [...prev];
+      next[idx] = value;
+      return next;
+    });
+  }
+
+  function goNext() {
+    setStatus(currentIdx, STATUS.REVIEWED);
+    if (!isLast) setCurrentIdx(currentIdx + 1);
+  }
+
+  function goPrev() {
+    if (currentIdx > 0) setCurrentIdx(currentIdx - 1);
+  }
+
+  function toggleDeny() {
+    const cur = statuses[currentIdx];
+    setStatus(currentIdx, cur === STATUS.DENIED ? STATUS.PENDING : STATUS.DENIED);
+  }
+
+  function send() {
+    if (!sequence) return;
+    const approvedSteps = sequence.steps.filter((_, i) => statuses[i] === STATUS.REVIEWED);
+    onSendSequence?.({ ...sequence, steps: approvedSteps, successful_steps: approvedSteps.length });
+  }
 
   return (
     <div id="s4" className="active strike-sequence">
       <div className="nl-header">
-        <button className="nl-back" onClick={onBack} title="Close panel">✕</button>
-        <span className="nl-title">MULTI-STRIKE SEQUENCE</span>
-        <span className="nl-badge">RAPID · CHAINED</span>
+        <button className="nl-back" onClick={onBack}>✕</button>
+        <span className="nl-title">MULTI-STRIKE</span>
+        <ProgressDots count={strikeCount} currentIdx={currentIdx} statuses={statuses} />
       </div>
 
       <div className="nl-scroll">
 
-        <div className="seq-explainer">
-          <strong>Recursive planner.</strong> Each strike's predicted output
-          (target destroyed, munition expended) becomes the input for the next
-          strike. Use this when there's no time to wait for drone feed updates
-          between rapid succession engagements.
+        {/* ═════ ENGAGEMENT-LEVEL section — applies to all strikes ═════ */}
+        <div className="form-section">Engagement</div>
+
+        <div className="nl-field">
+          <Stepper
+            value={strikeCount}
+            min={1}
+            max={maxStrikes}
+            onChange={setStrikeCount}
+            format={v => `${v} strike${v === 1 ? '' : 's'}`}
+            label={`of ${maxStrikes} hostile${maxStrikes === 1 ? '' : 's'} on feed`}
+          />
         </div>
 
-        {/* Target order + enable toggles */}
-        <div className="form-section">Engagement Order</div>
-        <div className="seq-order-list">
-          {order.map((id, idx) => {
-            const h = hostiles.find(x => x.id === id);
-            if (!h) return null;
-            const on = enabled.has(id);
-            return (
-              <div key={id} className={`seq-order-row${on ? '' : ' off'}`}>
-                <button
-                  className="seq-toggle"
-                  onClick={() => toggleEnabled(id)}
-                  aria-pressed={on}
-                >{on ? '✓' : '○'}</button>
-                <div className="seq-order-info">
-                  <div className="seq-order-pos">#{idx + 1}</div>
-                  <div className="seq-order-id">{id}</div>
-                  <div className="seq-order-class">{h.target_class?.replace(/_/g, ' ')} · {Math.round((h.cnn_confidence ?? 0) * 100)}% conf</div>
-                </div>
-                <div className="seq-order-arrows">
-                  <button onClick={() => moveTarget(idx, -1)} disabled={idx === 0}>↑</button>
-                  <button onClick={() => moveTarget(idx, +1)} disabled={idx === order.length - 1}>↓</button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Chain summary */}
         {sequence && (
-          <>
-            <div className="form-section" style={{ marginTop: 16 }}>
-              Chain Summary
-            </div>
-            <div className="seq-summary">
-              <div className="seq-summary-row">
-                <span className="seq-summary-label">Steps planned</span>
-                <span className="seq-summary-val">{sequence.total_steps_planned}</span>
-              </div>
-              <div className="seq-summary-row">
-                <span className="seq-summary-label">Successful</span>
-                <span className="seq-summary-val ok">{sequence.successful_steps}</span>
-              </div>
-              <div className="seq-summary-row">
-                <span className="seq-summary-label">Chain status</span>
-                <span className={`seq-summary-val ${sequence.chain_broken ? 'broken' : 'ok'}`}>
-                  {sequence.chain_broken ? 'BROKEN' : 'OK'}
-                </span>
-              </div>
-              <div className="seq-summary-row">
-                <span className="seq-summary-label">Munitions expended</span>
-                <span className="seq-summary-val mono">
-                  {Object.keys(sequence.munitions_expended).length === 0
-                    ? '—'
-                    : Object.entries(sequence.munitions_expended).map(([k, v]) => `${k}×${v}`).join(' · ')}
-                </span>
-              </div>
-            </div>
-
-            {/* Per-step chain */}
-            <div className="form-section" style={{ marginTop: 16 }}>
-              Strike Chain · {sequence.steps.length} steps
-            </div>
-
-            {sequence.steps.map((step, i) => (
-              <StepCard key={i} step={step} />
-            ))}
-          </>
+          <EngagementSummary
+            sequence={sequence}
+            coord={coord}
+            aircraftPlatform={AIRCRAFT_ON_STATION.platform}
+            strikeCount={strikeCount}
+          />
         )}
 
-        {!sequence && (
-          <div className="seq-empty">No targets enabled. Toggle one or more targets above to plan a chain.</div>
+        {sequence?.chain_broken && currentIdx >= sequence.successful_steps && (
+          <div className="seq-warn-block">
+            Chain broke at this strike — engine could not produce a viable munition.
+          </div>
+        )}
+
+        {/* ═════ PER-STRIKE section — current wizard step ═════ */}
+        {currentStep && (
+          <>
+            <div className="form-section" style={{ marginTop: 14 }}>
+              Strike {currentIdx + 1} of {strikeCount}
+            </div>
+            <div className="wizard-step">
+              {statuses[currentIdx] !== STATUS.PENDING && (
+                <div className="wizard-step-header">
+                  <StatusPill status={statuses[currentIdx]} />
+                </div>
+              )}
+              <StrikeDetail step={currentStep} />
+            </div>
+          </>
         )}
 
         <div style={{ height: 8 }}></div>
       </div>
 
-      <div className="nl-footer">
-        <button
-          className="btn-send-9line"
-          onClick={() => sequence && onSendSequence?.(sequence)}
-          disabled={!sequence || sequence.successful_steps === 0}
-        >
-          📡 SEND SEQUENCE ({sequence?.successful_steps ?? 0} STRIKES)
-        </button>
+      <div className="nl-footer wizard-footer-v2">
+        {!allActed ? (
+          <>
+            <button
+              className="wf-prev"
+              onClick={goPrev}
+              disabled={currentIdx === 0}
+              aria-label="Previous strike"
+            >←</button>
+            <button
+              className="wf-next"
+              onClick={goNext}
+              disabled={!currentStep}
+            >
+              {isLast ? 'CONFIRM ✓' : 'NEXT →'}
+            </button>
+            <button
+              className="wf-deny"
+              onClick={toggleDeny}
+              aria-label={statuses[currentIdx] === STATUS.DENIED ? 'Undo deny' : 'Deny strike'}
+            >
+              {statuses[currentIdx] === STATUS.DENIED ? '↶ undo' : '✗ deny'}
+            </button>
+          </>
+        ) : (
+          <button
+            className="btn-send-9line wizard-send"
+            onClick={send}
+            disabled={reviewedCount === 0}
+          >
+            📡 SEND {reviewedCount} 9-LINE{reviewedCount === 1 ? '' : 'S'}
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-function StepCard({ step }) {
+// ─── Engagement-level summary (applies to whole multi-strike plan) ────
+function EngagementSummary({ sequence, coord, aircraftPlatform, strikeCount }) {
+  const munitionTally = sequence.munitions_expended ?? {};
+  const munitionList = Object.entries(munitionTally)
+    .map(([id, n]) => `${id}×${n}`)
+    .join(' · ') || '—';
+
+  const isSingle = strikeCount <= 1;
+  const isTight = coord.recommended === 'type_3';
+
+  return (
+    <div className="engagement-card">
+      <div className="eng-row">
+        <span className="eng-label">Aircraft</span>
+        <span className="eng-value mono">{aircraftPlatform}</span>
+      </div>
+      <div className="eng-row">
+        <span className="eng-label">Coordination</span>
+        <span className="eng-value">
+          {isSingle ? 'Single 9-line' : `${strikeCount} passes · separate 9-lines`}
+        </span>
+      </div>
+      {!isSingle && (
+        <div className="eng-row">
+          <span className="eng-label">Target spread</span>
+          <span className="eng-value mono">{coord.spreadM} m</span>
+        </div>
+      )}
+      <div className="eng-row">
+        <span className="eng-label">Munitions</span>
+        <span className="eng-value mono">{munitionList}</span>
+      </div>
+
+      {!isSingle && (
+        <div className={`eng-coord-hint ${isTight ? 'tight' : 'dispersed'}`}>
+          <span className="eng-coord-label">{coord.label}</span>
+          <span className="eng-coord-detail">{coord.detail}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Progress dots ─────────────────────────────────────────────────────
+function ProgressDots({ count, currentIdx, statuses }) {
+  return (
+    <div className="progress-dots" aria-label={`Strike ${currentIdx + 1} of ${count}`}>
+      {Array.from({ length: count }).map((_, i) => {
+        const s = statuses[i];
+        const cls = i === currentIdx ? 'current'
+          : s === STATUS.REVIEWED ? 'done'
+          : s === STATUS.DENIED ? 'denied'
+          : 'pending';
+        return <span key={i} className={`dot ${cls}`} />;
+      })}
+      <span className="progress-text">{currentIdx + 1} of {count}</span>
+    </div>
+  );
+}
+
+// ─── Status pill on the active step ─────────────────────────────────────
+function StatusPill({ status }) {
+  if (status === STATUS.REVIEWED) return <span className="status-pill reviewed">✓ REVIEWED</span>;
+  if (status === STATUS.DENIED)   return <span className="status-pill denied">✗ DENIED</span>;
+  return <span className="status-pill pending">PENDING</span>;
+}
+
+// ─── Strike detail — the 9-line for the active step ────────────────────
+function StrikeDetail({ step }) {
   if (step.skipped) {
     return (
-      <div className="step-card skipped">
-        <div className="step-head">
-          <span className="step-num">#{step.step}</span>
-          <span className="step-target mono">{step.target_id}</span>
-          <span className="step-status skipped">SKIPPED</span>
-        </div>
-        <div className="step-skip-reason">{step.skip_reason}</div>
+      <div className="brief-section">
+        <div className="brief-section-label">SKIPPED · {step.target_id}</div>
+        <div className="brief-remark">{step.skip_reason}</div>
       </div>
     );
   }
@@ -186,63 +302,85 @@ function StepCard({ step }) {
   const r = step.recommendation;
   const blocked = r.engageability === 'NOT_ENGAGEABLE';
 
+  if (blocked) {
+    return (
+      <div className="brief-section restriction">
+        <div className="brief-section-label">⚠ BLOCKED · {r.target_id}</div>
+        {r.block_reasons?.map((reason, i) => (
+          <div key={i} className="brief-remark restriction">• {reason}</div>
+        ))}
+        <div style={{ marginTop: 6, fontSize: 11, color: 'var(--muted)' }}>
+          Flags: {r.flags?.join(', ') || 'none'}
+        </div>
+      </div>
+    );
+  }
+
+  const m = r.munition.primary;
+  const nl = r.nine_line;
+
   return (
-    <div className={`step-card ${blocked ? 'blocked' : ''}`}>
-      <div className="step-head">
-        <span className="step-num">#{step.step}</span>
-        <span className="step-target mono">{step.target_id}</span>
-        <span className={`step-status ${blocked ? 'blocked' : 'ok'}`}>
-          {blocked ? 'BLOCKED' : r.engageability.replace(/_/g, ' ')}
-        </span>
+    <>
+      <div className="strike-target-line">
+        <span className="mono target-id">{r.target_id}</span>
+        <span className="target-class">{r.target_class?.replace(/_/g, ' ')}</span>
+        <span className="target-conf">{Math.round((r.cnn_confidence ?? 0) * 100)}% conf</span>
       </div>
 
-      {!blocked && r.munition?.primary && (
-        <>
-          <div className="step-rec">
-            <div className="step-rec-row">
-              <span className="step-label">Weapon:</span>
-              <span className="step-value mono">{r.munition.primary.id}</span>
-              <span className="step-value-sub">RED {r.munition.primary.red_standing_m}m · {r.munition.primary.guidance.toUpperCase()}</span>
-            </div>
-            <div className="step-rec-row">
-              <span className="step-label">Control:</span>
-              <span className="step-value">{r.game_plan.control_type.replace('_', ' ')} · {r.game_plan.method_of_attack}</span>
-            </div>
-            <div className="step-rec-row">
-              <span className="step-label">Mark:</span>
-              <span className="step-value">{r.nine_line.line_7?.value}</span>
-            </div>
-            <div className="step-rec-row">
-              <span className="step-label">Friendlies:</span>
-              <span className="step-value">{r.nine_line.line_8?.direction} {r.nine_line.line_8?.distance_m}m</span>
-            </div>
-          </div>
+      {/* Game plan */}
+      <div className="brief-section">
+        <div className="brief-section-label">GAME PLAN</div>
+        <div className="brief-line"><span className="bl-label">Munition</span><span className="mono">{m.id}</span> · RED {m.red_standing_m}m · {m.guidance.toUpperCase()}</div>
+        <div className="brief-line"><span className="bl-label">Type</span>{r.game_plan.control_type.replace('_', ' ')} · {r.game_plan.method_of_attack}</div>
+        <div className="brief-line"><span className="bl-label">Call</span>{r.game_plan.clearance_call_phrase}</div>
+        <div className="brief-line"><span className="bl-label">Effect</span><strong>{m.effectiveness_rating}</strong> vs {r.target_class?.replace(/_/g, ' ')}</div>
+      </div>
 
-          {r.flags?.length > 0 && (
-            <div className="step-flags">
-              {r.flags.map(f => <span key={f} className={`flag-chip ${['DANGER_CLOSE', 'EXTREME_DANGER_CLOSE'].includes(f) ? 'danger' : 'warn'}`}>{f.replace(/_/g, ' ')}</span>)}
-            </div>
-          )}
-
-          {step.input_snapshot && (
-            <div className="step-input-snapshot">
-              <span className="step-snap-label">State at this step:</span>{' '}
-              {step.input_snapshot.remaining_hostiles} hostile{step.input_snapshot.remaining_hostiles === 1 ? '' : 's'} remaining ·{' '}
-              loadout {Object.entries(step.input_snapshot.loadout)
-                .map(([k, v]) => `${k}:${typeof v === 'object' ? v.count : v}`)
-                .join(' · ')}
-            </div>
-          )}
-        </>
-      )}
-
-      {blocked && (
-        <div className="step-blocked-reasons">
-          {r.block_reasons?.map((reason, i) => (
-            <div key={i} className="step-blocked-reason">• {reason}</div>
+      {/* Flags */}
+      {r.flags?.length > 0 && (
+        <div className="strike-flags">
+          {r.flags.map(f => (
+            <span key={f} className={`flag-chip ${['DANGER_CLOSE', 'EXTREME_DANGER_CLOSE'].includes(f) ? 'danger' : 'warn'}`}>
+              {f.replace(/_/g, ' ')}
+            </span>
           ))}
         </div>
       )}
-    </div>
+
+      {/* 9-line */}
+      <div className="brief-section">
+        <div className="brief-section-label">9-LINE</div>
+        <div className="brief-line"><span className="bl-label">L1 IP/BP</span><span className="mono">{nl.line_1_ip?.value}</span></div>
+        <div className="brief-line"><span className="bl-label">L2 Hdg</span><span className="mono">{String(nl.line_2_heading?.value_deg_magnetic ?? 0).padStart(3, '0')}°M</span></div>
+        <div className="brief-line"><span className="bl-label">L3 Dist</span><span className="mono">{nl.line_3_distance?.value} NM</span></div>
+        <div className="brief-line"><span className="bl-label">L4 Elev</span><span className="mono">{nl.line_4?.value} ft MSL</span> <span className="rb-tag-inline">READBACK</span></div>
+        <div className="brief-line"><span className="bl-label">L5 Tgt</span>{nl.line_5?.value}</div>
+        <div className="brief-line"><span className="bl-label">L6 Loc</span><span className="mono">{nl.line_6?.value}</span> <span className="rb-tag-inline">READBACK</span></div>
+        <div className="brief-line"><span className="bl-label">L7 Mark</span>{nl.line_7?.value}</div>
+        <div className="brief-line"><span className="bl-label">L8 Frnd</span><span className="mono">{nl.line_8?.direction} {nl.line_8?.distance_m}m</span></div>
+        <div className="brief-line"><span className="bl-label">L9 Egress</span>{nl.line_9?.value}</div>
+      </div>
+
+      {/* Restrictions */}
+      {r.restrictions?.length > 0 && (
+        <div className="brief-section restriction">
+          <div className="brief-section-label">RESTRICTIONS · MANDATORY READBACK</div>
+          {r.restrictions.map((rs, i) => (
+            <div key={i} className="brief-remark restriction">• {rs.text}</div>
+          ))}
+        </div>
+      )}
+
+      {/* Predicted state at this step (planning info) */}
+      {step.input_snapshot && (
+        <div className="planning-snapshot">
+          <span className="ps-label">At this step:</span>{' '}
+          {step.input_snapshot.remaining_hostiles} hostile{step.input_snapshot.remaining_hostiles === 1 ? '' : 's'} remaining ·{' '}
+          {Object.entries(step.input_snapshot.loadout)
+            .map(([k, v]) => `${k}:${typeof v === 'object' ? v.count : v}`)
+            .join(' · ')}
+        </div>
+      )}
+    </>
   );
 }
