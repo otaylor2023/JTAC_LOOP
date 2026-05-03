@@ -6,11 +6,18 @@ Reads bay_scenario.json and replays frames in order, sending CoT
 to WinTAK/ATAK via UDP multicast. Handles adds, updates, and removes
 automatically via TAKBridge.sync_detections().
 
+After playback, markers are removed by default. Use ``--hold`` or
+``--hold-only`` to keep the same tracks **stationary** (fixed lat/lon) and
+**alive** (periodic CoT refresh so stale time does not expire) until Ctrl+C.
+See TAKBridge.hold_active().
+
 Usage:
     python toy_jetson.py                          # default: reads bay_scenario.json
     python toy_jetson.py --scenario my_data.json  # custom scenario file
     python toy_jetson.py --speed 2.0              # 2x playback speed
-    python toy_jetson.py --loop                   # loop forever
+    python toy_jetson.py --loop                   # loop forever (still clears between runs)
+    python toy_jetson.py --hold                   # after last frame, keep refreshing until Ctrl+C
+    python toy_jetson.py --hold-only              # skip animation; hold last frame forever
     python toy_jetson.py --host 239.2.3.1         # custom multicast group
 """
 
@@ -98,7 +105,13 @@ class TAKBridge:
         self._send(cot)
         self.active.pop(uid, None)
 
-    def sync_detections(self, detections: list[dict]):
+    def sync_detections(
+        self,
+        detections: list[dict],
+        *,
+        stale_seconds: int = 30,
+        verbose: bool = True,
+    ):
         """Diff current detections against active markers — add, update, remove."""
         incoming_uids = {d["uid"] for d in detections}
 
@@ -106,7 +119,8 @@ class TAKBridge:
         for uid in list(self.active.keys()):
             if uid not in incoming_uids:
                 self.delete_target(uid)
-                print(f"  [-] REMOVED  {uid}")
+                if verbose:
+                    print(f"  [-] REMOVED  {uid}")
 
         # add or update
         for det in detections:
@@ -119,16 +133,51 @@ class TAKBridge:
                 callsign       = det.get("callsign", uid),
                 classification = det.get("classification", "unknown"),
                 confidence     = det.get("confidence", 0.0),
-                stale_seconds  = 30,
+                stale_seconds  = stale_seconds,
             )
-            icon = {"friendly": "🟦", "hostile": "🔴",
-                    "unknown":  "🟡", "neutral": "⬜"}.get(
-                        det.get("classification", "unknown"), "⬜")
-            print(f"  [{action}] {icon} {det['callsign']:12s} "
-                  f"({det['classification']:8s} {det['confidence']:.0%})  "
-                  f"{det['lat']:.4f}, {det['lon']:.4f}"
-                  + (f"  — {det['note']}" if det.get("note") else ""))
+            if verbose:
+                icon = {"friendly": "🟦", "hostile": "🔴",
+                        "unknown":  "🟡", "neutral": "⬜"}.get(
+                            det.get("classification", "unknown"), "⬜")
+                print(f"  [{action}] {icon} {det['callsign']:12s} "
+                      f"({det['classification']:8s} {det['confidence']:.0%})  "
+                      f"{det['lat']:.4f}, {det['lon']:.4f}"
+                      + (f"  — {det['note']}" if det.get("note") else ""))
             time.sleep(0.05)
+
+    def hold_active(
+        self,
+        detections: list[dict],
+        *,
+        interval_sec: float = 12.0,
+        stale_seconds: int = 120,
+        verbose_refresh: bool = False,
+    ) -> None:
+        """
+        Keep sending the same detection list on a fixed interval so ATAK keeps
+        showing stationary tracks with fresh ``stale`` times. Runs until
+        KeyboardInterrupt (propagate to caller).
+        """
+        n = len(detections)
+        print(
+            f"\n📌 Hold active: {n} track(s), "
+            f"refresh every {interval_sec}s, stale={stale_seconds}s "
+            f"(Ctrl+C to quit — tracks stay on map until then)"
+        )
+        tick = 0
+        silent_announced = False
+        while True:
+            tick += 1
+            vr = verbose_refresh or tick == 1
+            self.sync_detections(
+                detections,
+                stale_seconds=stale_seconds,
+                verbose=vr,
+            )
+            if not vr and not verbose_refresh and not silent_announced:
+                print("  (further hold refreshes are silent — Ctrl+C to quit)")
+                silent_announced = True
+            time.sleep(interval_sec)
 
     def clear_all(self):
         for uid in list(self.active.keys()):
@@ -152,11 +201,41 @@ def load_scenario(path: pathlib.Path) -> dict:
 
 # ─── Main playback loop ───────────────────────────────────────────────────────
 
-def play(scenario: dict, bridge: TAKBridge,
-         speed: float = 1.0, loop: bool = False):
+def _hold_frame_detections(scenario: dict, which: str) -> list[dict]:
+    frames = scenario["frames"]
+    if not frames:
+        raise ValueError("scenario has no frames")
+    idx = 0 if which.strip().lower() == "first" else -1
+    return list(frames[idx]["detections"])
+
+
+def play(
+    scenario: dict,
+    bridge: TAKBridge,
+    speed: float = 1.0,
+    loop: bool = False,
+    *,
+    hold: bool = False,
+    hold_only: bool = False,
+    hold_interval: float = 12.0,
+    hold_stale_seconds: int = 120,
+    hold_frame: str = "last",
+    hold_verbose_refresh: bool = False,
+):
 
     frames = scenario["frames"]
     name   = scenario.get("scenario", "Unknown Scenario")
+
+    if hold_only:
+        dets = _hold_frame_detections(scenario, hold_frame)
+        print(f"\n{'='*60}\n  {name}  (hold-only, {hold_frame} frame)\n{'='*60}")
+        bridge.hold_active(
+            dets,
+            interval_sec=hold_interval,
+            stale_seconds=hold_stale_seconds,
+            verbose_refresh=hold_verbose_refresh,
+        )
+        return
 
     run = 0
     while True:
@@ -181,6 +260,24 @@ def play(scenario: dict, bridge: TAKBridge,
                 interval = (next_t - t_sec) / speed
                 print(f"  ⏱  next frame in {interval:.1f}s ...")
                 time.sleep(interval)
+
+        if hold:
+            dets = _hold_frame_detections(scenario, hold_frame)
+            print(
+                f"\n✅ Scenario complete — holding {len(dets)} track(s) "
+                f"({hold_frame} frame), no auto-clear."
+            )
+            bridge.hold_active(
+                dets,
+                interval_sec=hold_interval,
+                stale_seconds=hold_stale_seconds,
+                verbose_refresh=hold_verbose_refresh,
+            )
+            if not loop:
+                break
+            print(f"\n🔁 Loop restart after hold ended (Ctrl+C to stop)")
+            time.sleep(2)
+            continue
 
         print(f"\n✅ Scenario complete. Clearing all markers in 3s...")
         time.sleep(3)
@@ -209,6 +306,43 @@ def parse_args():
                    help="Playback speed multiplier (default: 1.0, try 3.0 for fast demo)")
     p.add_argument("--loop", action="store_true",
                    help="Loop scenario forever")
+    p.add_argument(
+        "--hold",
+        action="store_true",
+        help="After the last frame, keep re-sending those tracks (stationary) "
+        "until Ctrl+C (no end-of-run clear)",
+    )
+    p.add_argument(
+        "--hold-only",
+        action="store_true",
+        help="Skip frame playback; immediately hold first or last frame until Ctrl+C",
+    )
+    p.add_argument(
+        "--hold-interval",
+        type=float,
+        default=12.0,
+        metavar="SEC",
+        help="Seconds between CoT refreshes while holding (default: 12)",
+    )
+    p.add_argument(
+        "--hold-stale-seconds",
+        type=int,
+        default=120,
+        metavar="SEC",
+        help="CoT stale horizon while holding — should exceed hold-interval "
+        "(default: 120)",
+    )
+    p.add_argument(
+        "--hold-frame",
+        choices=("first", "last"),
+        default="last",
+        help="Which frame's detections to use for --hold / --hold-only (default: last)",
+    )
+    p.add_argument(
+        "--hold-verbose-refresh",
+        action="store_true",
+        help="Print full per-target lines on every hold refresh (default: first + quiet ticks)",
+    )
     return p.parse_args()
 
 
@@ -225,8 +359,31 @@ def main():
     scenario = load_scenario(args.scenario)
     bridge   = TAKBridge(host=args.host, port=args.port)
 
+    if args.loop and (args.hold or args.hold_only):
+        print(
+            "NOTE: --loop is ignored with --hold / --hold-only "
+            "(playback runs once, then hold until Ctrl+C)."
+        )
+        args.loop = False
+    if (args.hold or args.hold_only) and args.hold_stale_seconds < args.hold_interval * 2:
+        print(
+            "WARN: --hold-stale-seconds should be at least ~2× --hold-interval "
+            "so CoT does not expire between refreshes."
+        )
+
     try:
-        play(scenario, bridge, speed=args.speed, loop=args.loop)
+        play(
+            scenario,
+            bridge,
+            speed=args.speed,
+            loop=args.loop,
+            hold=args.hold,
+            hold_only=args.hold_only,
+            hold_interval=args.hold_interval,
+            hold_stale_seconds=args.hold_stale_seconds,
+            hold_frame=args.hold_frame,
+            hold_verbose_refresh=args.hold_verbose_refresh,
+        )
     except KeyboardInterrupt:
         print("\n\nInterrupted — clearing all markers...")
         bridge.clear_all()

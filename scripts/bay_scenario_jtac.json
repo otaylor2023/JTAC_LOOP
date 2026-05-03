@@ -1,0 +1,200 @@
+{
+  "scenario": "SE Florida JTAC lab (CoT + plugin wire)",
+  "description": "Same shape as bay_scenario.json for toy_jetson.py, plus jtac_plugin_targets so send_plugin_json_udp.py can emit wire_kind single_target messages. Hostile uids match target_id so map pick resolves without extra meta.",
+  "frame_interval_sec": 3.0,
+  "schema_version": 1,
+  "jtac_self_id": "JTAC_LOOP bay_scenario_jtac",
+  "jtac_plugin_targets": [
+    {
+      "target_id": "TGT.2.201451",
+      "track": {
+        "lat": 26.709723,
+        "lon": -80.064163,
+        "callsign": "Light Skinned Vehicle"
+      },
+      "options": [
+        {
+          "role": "primary",
+          "recommendation": {
+            "engageability": "ENGAGEABLE",
+            "target_id": "TGT.2.201451",
+            "target_classification": "Light skinned vehicle (technical)",
+            "flags": ["DANGER_CLOSE"],
+            "routing": {
+              "current_step": "jtac_review",
+              "next_recipient": "jtac"
+            },
+            "game_plan": {
+              "control_type": "Type_2",
+              "method_of_attack": "BOT",
+              "clearance_call_phrase": "CLEARED HOT"
+            },
+            "munition": {
+              "primary": {
+                "id": "GBU-12",
+                "name": "GBU-12 Paveway II",
+                "guidance": "laser",
+                "effectiveness_rating": "PREFERRED"
+              },
+              "alternatives": [],
+              "eliminated": []
+            }
+          }
+        },
+        {
+          "role": "alternate",
+          "recommendation": {
+            "engageability": "ENGAGEABLE",
+            "target_id": "TGT.2.201451",
+            "munition": {
+              "primary": {
+                "id": "gun_20mm",
+                "name": "20 mm cannon",
+                "effectiveness_rating": "ACCEPTABLE"
+              },
+              "alternatives": [],
+              "eliminated": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "target_id": "TGT.2.201452",
+      "track": {
+        "lat": 26.710323,
+        "lon": -80.066963,
+        "callsign": "Dismounted Infantry x4"
+      },
+      "options": [
+        {
+          "role": "primary",
+          "recommendation": {
+            "engageability": "ENGAGEABLE",
+            "target_id": "TGT.2.201452",
+            "target_classification": "Dismounted infantry x4",
+            "routing": {
+              "current_step": "jtac_review",
+              "next_recipient": "jtac"
+            },
+            "game_plan": {
+              "control_type": "Type_2",
+              "method_of_attack": "BOT"
+            },
+            "munition": {
+              "primary": {
+                "id": "GBU-12",
+                "name": "GBU-12 Paveway II",
+                "guidance": "laser",
+                "effectiveness_rating": "PREFERRED"
+              },
+              "alternatives": [],
+              "eliminated": []
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "frames": [
+    {
+      "frame": 0,
+      "t_sec": 0,
+      "detections": [
+        {
+          "uid": "friendly-fl-01",
+          "callsign": "BLUE-1",
+          "classification": "friendly",
+          "confidence": 0.96,
+          "lat": 26.712,
+          "lon": -80.07,
+          "note": "SE Florida AO — friendly"
+        },
+        {
+          "uid": "TGT.2.201451",
+          "callsign": "Light Skinned Vehicle",
+          "classification": "hostile",
+          "confidence": 0.9,
+          "lat": 26.709723,
+          "lon": -80.064163,
+          "note": "uid matches plugin target_id"
+        },
+        {
+          "uid": "TGT.2.201452",
+          "callsign": "Dismounted Infantry x4",
+          "classification": "hostile",
+          "confidence": 0.85,
+          "lat": 26.710323,
+          "lon": -80.066963,
+          "note": "second JTAC track"
+        }
+      ]
+    },
+    {
+      "frame": 1,
+      "t_sec": 3,
+      "detections": [
+        {
+          "uid": "friendly-fl-01",
+          "callsign": "BLUE-1",
+          "classification": "friendly",
+          "confidence": 0.96,
+          "lat": 26.7122,
+          "lon": -80.0698,
+          "note": "minor move"
+        },
+        {
+          "uid": "TGT.2.201451",
+          "callsign": "Light Skinned Vehicle",
+          "classification": "hostile",
+          "confidence": 0.91,
+          "lat": 26.70995,
+          "lon": -80.0639,
+          "note": "drift NE"
+        },
+        {
+          "uid": "TGT.2.201452",
+          "callsign": "Dismounted Infantry x4",
+          "classification": "hostile",
+          "confidence": 0.87,
+          "lat": 26.71055,
+          "lon": -80.0665,
+          "note": "closing"
+        }
+      ]
+    },
+    {
+      "frame": 2,
+      "t_sec": 6,
+      "detections": [
+        {
+          "uid": "friendly-fl-01",
+          "callsign": "BLUE-1",
+          "classification": "friendly",
+          "confidence": 0.95,
+          "lat": 26.7125,
+          "lon": -80.0695,
+          "note": "holding"
+        },
+        {
+          "uid": "TGT.2.201451",
+          "callsign": "Light Skinned Vehicle",
+          "classification": "hostile",
+          "confidence": 0.93,
+          "lat": 26.7102,
+          "lon": -80.0635,
+          "note": "continuing NE"
+        },
+        {
+          "uid": "TGT.2.201452",
+          "callsign": "Dismounted Infantry x4",
+          "classification": "hostile",
+          "confidence": 0.88,
+          "lat": 26.7108,
+          "lon": -80.0661,
+          "note": "converging"
+        }
+      ]
+    }
+  ]
+}
