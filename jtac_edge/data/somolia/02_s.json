@@ -1,0 +1,301 @@
+{
+    "scenario": "Somolia 02 \u2014 OPFOR dismount (static)",
+    "description": "Same BLUE cluster anchors; hostile position fixed.",
+    "single_run": true,
+    "frame_step_sec": 3,
+    "sync_stale_seconds": 45,
+    "reset_before_play": true,
+    "post_clear_sleep_sec": 0.45,
+    "wiggle_circle_radius_m_play": 38,
+    "wiggle_omega_scale": 0.14,
+    "frames": [
+      {
+        "frame": 0,
+        "t_sec": 0,
+        "detections": [
+          {
+            "uid": "som-f-c1-a",
+            "callsign": "BLUE-C1A",
+            "classification": "friendly",
+            "confidence": 0.95,
+            "lat": 42.602942,
+            "lon": -0.251954,
+            "note": "Cluster 1"
+          },
+          {
+            "uid": "som-f-c1-b",
+            "callsign": "BLUE-C1B",
+            "classification": "friendly",
+            "confidence": 0.94,
+            "lat": 42.602991,
+            "lon": -0.252021,
+            "note": "Cluster 1"
+          },
+          {
+            "uid": "som-f-c1-c",
+            "callsign": "BLUE-C1C",
+            "classification": "friendly",
+            "confidence": 0.9299999999999999,
+            "lat": 42.602816,
+            "lon": -0.252053,
+            "note": "Cluster 1"
+          },
+          {
+            "uid": "som-f-c2-a",
+            "callsign": "BLUE-C2A",
+            "classification": "friendly",
+            "confidence": 0.95,
+            "lat": 42.601026,
+            "lon": -0.253521,
+            "note": "Cluster 2"
+          },
+          {
+            "uid": "som-f-c2-b",
+            "callsign": "BLUE-C2B",
+            "classification": "friendly",
+            "confidence": 0.94,
+            "lat": 42.601086,
+            "lon": -0.253571,
+            "note": "Cluster 2"
+          },
+          {
+            "uid": "som-f-c2-c",
+            "callsign": "BLUE-C2C",
+            "classification": "friendly",
+            "confidence": 0.9299999999999999,
+            "lat": 42.600966,
+            "lon": -0.253631,
+            "note": "Cluster 2"
+          },
+          {
+            "uid": "som-f-c3-a",
+            "callsign": "BLUE-C3A",
+            "classification": "friendly",
+            "confidence": 0.95,
+            "lat": 42.59979,
+            "lon": -0.253939,
+            "note": "Cluster 3"
+          },
+          {
+            "uid": "som-f-c3-b",
+            "callsign": "BLUE-C3B",
+            "classification": "friendly",
+            "confidence": 0.94,
+            "lat": 42.59985,
+            "lon": -0.253989,
+            "note": "Cluster 3"
+          },
+          {
+            "uid": "som-f-c3-c",
+            "callsign": "BLUE-C3C",
+            "classification": "friendly",
+            "confidence": 0.9299999999999999,
+            "lat": 42.59972,
+            "lon": -0.254029,
+            "note": "Cluster 3"
+          },
+          {
+            "uid": "som-hst-02",
+            "callsign": "OPFOR-STATIC",
+            "classification": "hostile",
+            "confidence": 0.86,
+            "lat": 42.608739,
+            "lon": -0.249847,
+            "note": "Static OPFOR"
+          }
+        ]
+      },
+      {
+        "frame": 1,
+        "t_sec": 3,
+        "detections": [
+          {
+            "uid": "som-f-c1-a",
+            "callsign": "BLUE-C1A",
+            "classification": "friendly",
+            "confidence": 0.95,
+            "lat": 42.602952,
+            "lon": -0.251946,
+            "note": "Cluster 1"
+          },
+          {
+            "uid": "som-f-c1-b",
+            "callsign": "BLUE-C1B",
+            "classification": "friendly",
+            "confidence": 0.94,
+            "lat": 42.603001,
+            "lon": -0.252013,
+            "note": "Cluster 1"
+          },
+          {
+            "uid": "som-f-c1-c",
+            "callsign": "BLUE-C1C",
+            "classification": "friendly",
+            "confidence": 0.9299999999999999,
+            "lat": 42.602826,
+            "lon": -0.252045,
+            "note": "Cluster 1"
+          },
+          {
+            "uid": "som-f-c2-a",
+            "callsign": "BLUE-C2A",
+            "classification": "friendly",
+            "confidence": 0.95,
+            "lat": 42.601036,
+            "lon": -0.253513,
+            "note": "Cluster 2"
+          },
+          {
+            "uid": "som-f-c2-b",
+            "callsign": "BLUE-C2B",
+            "classification": "friendly",
+            "confidence": 0.94,
+            "lat": 42.601096,
+            "lon": -0.253563,
+            "note": "Cluster 2"
+          },
+          {
+            "uid": "som-f-c2-c",
+            "callsign": "BLUE-C2C",
+            "classification": "friendly",
+            "confidence": 0.9299999999999999,
+            "lat": 42.600976,
+            "lon": -0.253623,
+            "note": "Cluster 2"
+          },
+          {
+            "uid": "som-f-c3-a",
+            "callsign": "BLUE-C3A",
+            "classification": "friendly",
+            "confidence": 0.95,
+            "lat": 42.5998,
+            "lon": -0.253931,
+            "note": "Cluster 3"
+          },
+          {
+            "uid": "som-f-c3-b",
+            "callsign": "BLUE-C3B",
+            "classification": "friendly",
+            "confidence": 0.94,
+            "lat": 42.59986,
+            "lon": -0.253981,
+            "note": "Cluster 3"
+          },
+          {
+            "uid": "som-f-c3-c",
+            "callsign": "BLUE-C3C",
+            "classification": "friendly",
+            "confidence": 0.9299999999999999,
+            "lat": 42.59973,
+            "lon": -0.254021,
+            "note": "Cluster 3"
+          },
+          {
+            "uid": "som-hst-02",
+            "callsign": "OPFOR-STATIC",
+            "classification": "hostile",
+            "confidence": 0.87,
+            "lat": 42.608739,
+            "lon": -0.249847,
+            "note": "Static OPFOR"
+          }
+        ]
+      },
+      {
+        "frame": 2,
+        "t_sec": 6,
+        "detections": [
+          {
+            "uid": "som-f-c1-a",
+            "callsign": "BLUE-C1A",
+            "classification": "friendly",
+            "confidence": 0.95,
+            "lat": 42.602962,
+            "lon": -0.251938,
+            "note": "Cluster 1"
+          },
+          {
+            "uid": "som-f-c1-b",
+            "callsign": "BLUE-C1B",
+            "classification": "friendly",
+            "confidence": 0.94,
+            "lat": 42.603011,
+            "lon": -0.252005,
+            "note": "Cluster 1"
+          },
+          {
+            "uid": "som-f-c1-c",
+            "callsign": "BLUE-C1C",
+            "classification": "friendly",
+            "confidence": 0.9299999999999999,
+            "lat": 42.602836,
+            "lon": -0.252037,
+            "note": "Cluster 1"
+          },
+          {
+            "uid": "som-f-c2-a",
+            "callsign": "BLUE-C2A",
+            "classification": "friendly",
+            "confidence": 0.95,
+            "lat": 42.601046,
+            "lon": -0.253505,
+            "note": "Cluster 2"
+          },
+          {
+            "uid": "som-f-c2-b",
+            "callsign": "BLUE-C2B",
+            "classification": "friendly",
+            "confidence": 0.94,
+            "lat": 42.601106,
+            "lon": -0.253555,
+            "note": "Cluster 2"
+          },
+          {
+            "uid": "som-f-c2-c",
+            "callsign": "BLUE-C2C",
+            "classification": "friendly",
+            "confidence": 0.9299999999999999,
+            "lat": 42.600986,
+            "lon": -0.253615,
+            "note": "Cluster 2"
+          },
+          {
+            "uid": "som-f-c3-a",
+            "callsign": "BLUE-C3A",
+            "classification": "friendly",
+            "confidence": 0.95,
+            "lat": 42.59981,
+            "lon": -0.253923,
+            "note": "Cluster 3"
+          },
+          {
+            "uid": "som-f-c3-b",
+            "callsign": "BLUE-C3B",
+            "classification": "friendly",
+            "confidence": 0.94,
+            "lat": 42.59987,
+            "lon": -0.253973,
+            "note": "Cluster 3"
+          },
+          {
+            "uid": "som-f-c3-c",
+            "callsign": "BLUE-C3C",
+            "classification": "friendly",
+            "confidence": 0.9299999999999999,
+            "lat": 42.59974,
+            "lon": -0.254013,
+            "note": "Cluster 3"
+          },
+          {
+            "uid": "som-hst-02",
+            "callsign": "OPFOR-STATIC",
+            "classification": "hostile",
+            "confidence": 0.88,
+            "lat": 42.608739,
+            "lon": -0.249847,
+            "note": "Static OPFOR"
+          }
+        ]
+      }
+    ]
+  }
