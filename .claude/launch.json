@@ -4,7 +4,7 @@
     {
       "name": "jtac-sim",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": ["--prefix", "/Users/lxviolone/JTAC_Manuals/UI/jtac-sim-react", "run", "dev"],
       "port": 5173
     }
   ]

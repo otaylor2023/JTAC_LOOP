@@ -94,15 +94,18 @@ export const TARGET_OPTIONS = HOSTILES.map(h => ({
 }));
 
 // Pre-loaded named Initial Points — would come from mission planning in production.
+// Each IP has a fixed geographic position (lat/lng). When the JTAC selects an IP,
+// the engine computes the attack heading as the bearing from that IP to the target.
+// Positions roughly 5-7 km from the AO center at cardinal compass points.
 export const NAMED_IPS = [
-  { id: 'IP NORTH',   label: 'IP NORTH'   },
-  { id: 'IP SOUTH',   label: 'IP SOUTH'   },
-  { id: 'IP EAST',    label: 'IP EAST'    },
-  { id: 'IP WEST',    label: 'IP WEST'    },
-  { id: 'IP ALPHA',   label: 'IP ALPHA'   },
-  { id: 'IP BRAVO',   label: 'IP BRAVO'   },
-  { id: 'IP HOTEL',   label: 'IP HOTEL'   },
-  { id: 'BP HASTY',   label: 'BP HASTY'   },
+  { id: 'IP NORTH',   label: 'IP NORTH', lat: 31.5450, lng: 64.2720 },   // ~7 km N
+  { id: 'IP SOUTH',   label: 'IP SOUTH', lat: 31.4180, lng: 64.2720 },   // ~7 km S
+  { id: 'IP EAST',    label: 'IP EAST',  lat: 31.4815, lng: 64.3450 },   // ~7 km E
+  { id: 'IP WEST',    label: 'IP WEST',  lat: 31.4815, lng: 64.1990 },   // ~7 km W
+  { id: 'IP ALPHA',   label: 'IP ALPHA', lat: 31.5300, lng: 64.3300 },   // NE
+  { id: 'IP BRAVO',   label: 'IP BRAVO', lat: 31.4300, lng: 64.3300 },   // SE
+  { id: 'IP HOTEL',   label: 'IP HOTEL', lat: 31.5300, lng: 64.2100 },   // NW
+  { id: 'BP HASTY',   label: 'BP HASTY', lat: 31.4300, lng: 64.2100 },   // SW
 ];
 
 // Preset remark / restriction tags JTAC can add with one tap. Each is a

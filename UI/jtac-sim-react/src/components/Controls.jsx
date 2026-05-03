@@ -13,16 +13,22 @@ import { useCallback } from 'react';
 
 // ─────────────────────────────────────────────────────────────────────────
 export function Stepper({ value, min = 0, max = 9999, step = 1, onChange, format = v => v, suffix = '', label }) {
-  const dec = useCallback(() => onChange?.(Math.max(min, value - step)), [value, min, step, onChange]);
-  const inc = useCallback(() => onChange?.(Math.min(max, value + step)), [value, max, step, onChange]);
+  // Always coerce — strings like '1688' would otherwise concatenate via `value + step`
+  // and produce wildly wrong results that crash downstream consumers.
+  const num = Number(value);
+  const safeNum = Number.isFinite(num) ? num : min;
+
+  const dec = useCallback(() => onChange?.(Math.max(min, safeNum - step)), [safeNum, min, step, onChange]);
+  const inc = useCallback(() => onChange?.(Math.min(max, safeNum + step)), [safeNum, max, step, onChange]);
+
   return (
     <div className="stepper">
-      <button className="stepper-btn" onClick={dec} disabled={value <= min} aria-label="decrease">−</button>
+      <button className="stepper-btn" onClick={dec} disabled={safeNum <= min} aria-label="decrease">−</button>
       <div className="stepper-display">
-        <div className="stepper-value">{format(value)}{suffix}</div>
+        <div className="stepper-value">{format(safeNum)}{suffix}</div>
         {label && <div className="stepper-label">{label}</div>}
       </div>
-      <button className="stepper-btn" onClick={inc} disabled={value >= max} aria-label="increase">+</button>
+      <button className="stepper-btn" onClick={inc} disabled={safeNum >= max} aria-label="increase">+</button>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import './App.css';
 
 import MapView from './components/MapView';
@@ -6,9 +6,12 @@ import NineLineForm from './components/NineLineForm';
 import StrikeSequence from './components/StrikeSequence';
 import RationaleModal from './components/RationaleModal';
 import SentOverlay from './components/SentOverlay';
+import ErrorBoundary from './components/ErrorBoundary';
 
 import { useDroneFeed, useFeedAge } from './hooks/useDroneFeed';
 import { useAIRecommendation } from './hooks/useAIRecommendation';
+import { bearingDeg, distanceM } from './engine/geo';
+import { NAMED_IPS } from './data/units';
 
 export default function App() {
   // ── Drone feed (would be CoT/UDP websocket in production) ─────────────
@@ -21,7 +24,9 @@ export default function App() {
   // These feed back into the engine so the recommendation re-runs coherently.
   const initialPrimary = hostiles.find(h => h.primary)?.id ?? hostiles[0]?.id;
   const [primaryTargetId, setPrimaryTargetId] = useState(initialPrimary);
-  const [userHeading, setUserHeading] = useState(null); // null = use engine's egress-derived heading
+  const [userHeading, setUserHeading] = useState(null);
+  const [weaponOverride, setWeaponOverride] = useState(null);
+  const [egressDir, setEgressDir] = useState(null);
 
   // Tactical knobs (would come from JTAC tablet UI eventually).
   const [tacticalState] = useState({
@@ -37,14 +42,32 @@ export default function App() {
     hostiles, friendlies, self,
     primaryTargetId,
     user_heading: userHeading,
+    weapon_override: weaponOverride,
     ...tacticalState,
   });
+
+  // Reset weapon override + egress when target changes — engine picks fresh.
+  useState(() => null); // placeholder for clarity
 
   // ── UI state ──────────────────────────────────────────────────────────
   const [screen, setScreen] = useState('map');
   const [modalType, setModalType] = useState(null);
   const [sent, setSent] = useState(false);
   const [recVisible, setRecVisible] = useState(true);
+
+  // Pulse the AI pill briefly whenever the primary target changes — gives
+  // the JTAC a clear "new recommendation ready" cue, especially after rapid
+  // hostile-tapping or after closing the panel and re-engaging.
+  const [pillPulse, setPillPulse] = useState(false);
+  const prevTargetRef = useRef(primaryTargetId);
+  useEffect(() => {
+    if (prevTargetRef.current !== primaryTargetId) {
+      prevTargetRef.current = primaryTargetId;
+      setPillPulse(true);
+      const id = setTimeout(() => setPillPulse(false), 1500);
+      return () => clearTimeout(id);
+    }
+  }, [primaryTargetId]);
 
   const goTo = useCallback(next => setScreen(next), []);
 
@@ -64,7 +87,17 @@ export default function App() {
         showAttack={aiReady && recVisible && !isBlocked}
         scenarioActive={aiReady && recVisible && !isBlocked}
         weaponMinSafe={weaponRedM}
+        egressDir={egressDir ?? recommendation?.nine_line?.line_9?.direction ?? null}
         onChangeHeading={h => setUserHeading(h)}
+        onSelectHostile={id => {
+          setPrimaryTargetId(id);
+          setWeaponOverride(null);
+          setEgressDir(null);
+          // Tapping a hostile ALWAYS surfaces the 9-line for that target.
+          // Removes the need to find the pill afterward and prevents the
+          // closure-captures-stale-screen bug.
+          setScreen('nineline');
+        }}
         resizeKey={screen}
       />
 
@@ -100,16 +133,17 @@ export default function App() {
             </button>
           )}
           <button
-            className={`ai-pill${aiReady ? '' : ' pending'}${isBlocked ? ' blocked' : ''}`}
+            className={`ai-pill${aiReady ? '' : ' pending'}${isBlocked ? ' blocked' : ''}${pillPulse ? ' pulse' : ''}`}
             onClick={aiReady ? () => goTo('nineline') : undefined}
             disabled={!aiReady}
+            title={aiReady ? 'Open 9-line review' : 'AI is computing'}
           >
             <span className="pill-dot"></span>
             {!aiReady
-              ? 'AI computing…'
+              ? 'AI COMPUTING…'
               : isBlocked
-                ? `BLOCKED · ${recommendation?.flags?.[0] ?? 'review'}`
-                : `Review 9-Line · ${recommendation?.munition?.primary?.id ?? '—'}`}
+                ? `REVIEW · BLOCKED (${recommendation?.flags?.[0]?.replace(/_/g, ' ') ?? 'review'})`
+                : `REVIEW 9-LINE · ${recommendation?.munition?.primary?.id ?? '—'}`}
           </button>
           {aiReady && hostiles.length > 1 && (
             <button
@@ -124,11 +158,24 @@ export default function App() {
         </div>
       </div>
 
+      <ErrorBoundary>
       <NineLineForm
         active={screen === 'nineline'}
         recommendation={recommendation}
+        weaponOverride={weaponOverride}
         onBack={() => goTo('map')}
-        onChangePrimaryTarget={setPrimaryTargetId}
+        onChangePrimaryTarget={id => { setPrimaryTargetId(id); setWeaponOverride(null); setEgressDir(null); }}
+        onChangeWeapon={setWeaponOverride}
+        onChangeEgressDir={setEgressDir}
+        onChangeIP={(ipName) => {
+          // Doctrinal: heading = bearing(IP → target). Compute and update the
+          // user_heading so the map's attack vector + heading line update live.
+          const ip = NAMED_IPS.find(x => x.id === ipName);
+          const tgt = hostiles.find(h => h.id === primaryTargetId);
+          if (ip && tgt) {
+            setUserHeading(Math.round(bearingDeg(ip.lat, ip.lng, tgt.lat, tgt.lng)));
+          }
+        }}
         onWhy={type => setModalType(type)}
         onSend={() => setSent(true)}
         onGFC={() => {
@@ -146,7 +193,9 @@ export default function App() {
           );
         }}
       />
+      </ErrorBoundary>
 
+      <ErrorBoundary>
       <StrikeSequence
         active={screen === 'sequence'}
         hostiles={hostiles}
@@ -154,17 +203,17 @@ export default function App() {
         self={self}
         onBack={() => goTo('map')}
         onSendSequence={(seq) => {
+          const lines = seq.steps
+            .filter(s => !s.skipped && s.recommendation?.engageability !== 'NOT_ENGAGEABLE')
+            .map((s, i) => `9-Line ${i + 1}: ${s.target_id} → ${s.recommendation.munition.primary.id}`);
           alert(
-            `MULTI-STRIKE SEQUENCE QUEUED\n\n` +
-            `${seq.successful_steps} strikes · ${Object.entries(seq.munitions_expended).map(([k, v]) => `${k}×${v}`).join(', ')}\n` +
-            `Chain status: ${seq.chain_broken ? 'BROKEN — review' : 'OK'}\n\n` +
-            seq.steps
-              .filter(s => !s.skipped && s.recommendation?.engageability !== 'NOT_ENGAGEABLE')
-              .map((s, i) => `Strike ${i + 1}: ${s.target_id} → ${s.recommendation.munition.primary.id} · ${s.recommendation.game_plan.control_type.replace('_', ' ')}`)
-              .join('\n')
+            `${seq.successful_steps} 9-LINE${seq.successful_steps === 1 ? '' : 'S'} QUEUED\n\n` +
+            (seq.chain_broken ? 'CHAIN BROKEN — review before transmission\n\n' : '') +
+            lines.join('\n')
           );
         }}
       />
+      </ErrorBoundary>
 
       {modalType && (
         <RationaleModal
